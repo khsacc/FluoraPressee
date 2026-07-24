@@ -9,9 +9,19 @@ description: FluoRaPresséeオンラインマニュアル
 
 ![](../../logo/Large_logo.svg)
 
-FluoRaPresséeは、スペクトルのリアルタイム取得からバックグラウンド補正、
-波長較正、ピークフィッティング、高圧実験における圧力計算までを一貫して行う
-PythonベースのGUIアプリケーションです。
+
+
+FluoRaPresséeは、高圧実験で使用することを念頭に置いて開発された、PythonベースのGUIアプリケーションであり、分光器・カメラの制御、データ取得、フィッティング、圧力計算までが一つのアプリケーションで行えます。
+
+特に、一般的な商用ソフトウェアにはない特徴として、
+
+1. 横軸の較正情報を詳細に、かつ内部的に保存する。また、同一の回折格子・中心位置の較正情報をまとめて管理することで、デフォルトでは最新の較正情報だけをスピーディーに適用するために、較正情報をデータベース管理している。
+1. 高圧実験における、蛍光・Ramanスケールを用いた圧力計算に特化した計算プラットフォームを備えている。
+1. 放射光ビームラインなどにおける、大規模自動化プラットフォームにも組み込めるように、機器制御・データ取得・解析を外部から行えるAPIを備えている。
+
+といった点が挙げられます。
+
+## 対応機種
 
 現在、以下の装置構成に対応しています。
 
@@ -28,9 +38,6 @@ PythonベースのGUIアプリケーションです。
 | Princeton Instruments | Acton SpectraPro SP-2750 | RS-232C–USB | ProEM 1600<sup>2</sup> | GigE | BL-18C, PF, KEK |
 | Ocean Optics | USB2000 | USB | USB2000 | USB | 東京大学 |
 
-## このマニュアルについて
-
-左側のメニューから、インストール方法、基本操作、API連携について確認できます。
 
 :::caution
 
@@ -43,3 +50,12 @@ Andor SDKおよびPrinceton Instruments PICam Runtimeを利用した装置制御
 
 - [GitHubリポジトリ](https://github.com/khsacc/FluoRaPressee)
 - [不具合・要望の報告](https://github.com/khsacc/FluoRaPressee/issues)
+
+
+## 謝辞
+
+FluoRaPressée の「分光器の制御からデータ解析まで一つのアプリケーション内で完結させる」というコンセプトは、[Rubycond](https://github.com/CelluleProjet/Rubycond) というソフトウェアに着想を得たものです。Rubycond は、著者が Stefan Klotz 氏との共同研究のため、フランス・パリ ソルボンヌ大学/CNRS/MNMH 鉱物学・物質物理学・宇宙化学研究所  (Institut de minéralogie, de physique des matériaux et de cosmochimie: IMPMC) に滞在していた際、日常的に使用していたソフトであり、この経験の中で、Raman測定への拡張や、さらに大規模プラットフォームへと組み込める API 付きのアプリケーション開発の発想を思いつきました。Rubycondの開発者である、Yiuri Garino・Silvia Boccato両氏に感謝申し上げます。
+
+
+FluoRaPressée は、東京大学大学院理学系研究科附属地殻化学実験施設 地球化学研究室において開発されました。開発に必要な環境を提供してくださった小松 一生准教授・鍵 裕之教授に感謝申し上げます。加えて、小松准教授および小谷野蒼大さんには、役にたつフィードバックをたくさんいただきましたことにも感謝申し上げます。
+

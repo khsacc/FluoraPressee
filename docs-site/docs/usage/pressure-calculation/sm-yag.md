@@ -4,7 +4,7 @@ title: Sm3+:YAG
 description: Sm3+:YAG（Y1線）蛍光線による圧力スケールと温度補正
 ---
 
-# Sm³⁺:YAG
+# Sm<sup>3+</sup>:YAG
 
 - 種類: 蛍光 (fluorescence)
 - 横軸単位: nm

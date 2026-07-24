@@ -6,11 +6,8 @@ description: spectrometerConfig.jsonの仕様と、初回接続時にGUIのセ�
 
 # ハードウェア設定
 
-FluoRaPressée がどの分光器・カメラをどう制御するか（メーカー、接続方法、grating構成、ROIの初期値、冷却設定など）は、リポジトリルート直下の `spectrometerConfig.json` に保存されています。このファイルはアプリ起動時にカメラ／分光器スレッドを構築する際に読み込まれ、以後は明示的に再起動するまで一部の項目（後述）は再読み込みされません。
+FluoRaPressée は、制御する分光器・カメラに関する情報を `spectrometerConfig.json` と呼ばれるファイルに格納し、起動時に自動的に読み出すことで、装置との通信の初期化を行います。ここには、メーカー、接続方法、grating構成、ROIの初期値、冷却設定などが含まれます。FluoRaPressée は、装置との堅牢な通信を実現するため、接続された装置の情報を型番とシリアル番号を用いて識別し、同一の機器と判断できた場合に限り、過去の設定情報を適用する操作を行うように設計されています。
 
-:::note
-似た名前のものに、較正ダイアログの「Save and apply」で作られる**Configuration**（grating・中心波長・ROI・横軸較正のバージョン管理付き記録）があります。こちらはアプリ本体ではなくOSのユーザー別application data領域に保存される別の仕組みで、詳細は[Configurationファイル](data-formats/configuration.md)を参照してください。本ページで扱う `spectrometerConfig.json` は、装置そのものの構成（どのメーカー・どう接続するか）を表す、より低レベルな設定です。
-:::
 
 ## 初回起動時の自動生成
 

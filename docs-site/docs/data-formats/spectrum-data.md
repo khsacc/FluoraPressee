@@ -38,7 +38,7 @@ CSV風のプレーンテキストです。既定のファイル名は `data_YYYY
 ```
 
 - `Spectrometer Mode` が `Raman shift` の場合、`Centre Wavelength` の代わりに `Excitation Wavelength`
-  （nm）と `Centre Raman shift`（cm⁻¹）の2行が挿入されます。
+  （nm）と `Centre Raman shift`（cm<sup>-1</sup>）の2行が挿入されます。
 - `Calibration Coefficients` は横軸較正が未適用の場合 `# Calibration Coefficients: None` になります。
 - `ROI Start` / `ROI End` は、その時点でROIスピンボックス（Vertical Start/End）に入力されている値を
   そのまま記録します。2D表示やFull ROI表示で保存した場合でも、この2行はスピンボックスの値のままです。
@@ -55,7 +55,7 @@ CSV風のプレーンテキストです。既定のファイル名は `data_YYYY
 - 横軸がRaman shiftで、かつ較正済みの場合: `Raman_shift_cm-1,Intensity`
 
 `Spectrometer Mode: Raman shift` であっても較正が未適用の場合は、横軸はpixel値になるため列見出しは
-`Wavelength_or_Pixel,Intensity` のままです。横軸の列は保存時点で完全に解決済み（nm / cm⁻¹ / pixel）の値
+`Wavelength_or_Pixel,Intensity` のままです。横軸の列は保存時点で完全に解決済み（nm / cm<sup>-1</sup> / pixel）の値
 であり、読み込み側でグレーティングや較正係数を別途参照する必要はありません。「Flip X-axis」が有効な場合も、
 横軸・縦軸ともに反転済みの状態でそのまま保存されます。
 

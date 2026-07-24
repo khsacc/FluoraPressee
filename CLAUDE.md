@@ -197,3 +197,4 @@ full local control.
 - User-facing manual content (installation, usage, API reference) lives in `docs-site/` (a Docusaurus
   site published to GitHub Pages; manual screenshots live under `docs-site/static/img/manual/`), not
   internal developer docs (those live in `work/`).
+  - In the markdown files in `docs-site/`, LaTeX notation ($...$, $$...$$) can be used.

@@ -7,20 +7,20 @@ description: Zircon B1gモードによる圧力スケールと温度補正
 # Zircon B1g
 
 - 種類: Raman
-- 横軸単位: cm⁻¹
-- ゼロ圧ピーク位置の初期値: 1008.6 cm⁻¹（あくまで初期値です。実際の測定系・試料で測ったゼロ圧位置に
+- 横軸単位: cm<sup>-1</sup>
+- ゼロ圧ピーク位置の初期値: 1008.6 cm<sup>-1</sup>（あくまで初期値です。実際の測定系・試料で測ったゼロ圧位置に
   置き換えてください）
 
 ## 圧力スケール（2種類、いずれも温度補正は任意）
 
-- **Schmidt et al. 2013** — <i>Am. Min.</i>（線形、5.69 cm⁻¹/GPa）
+- **Schmidt et al. 2013** — <i>Am. Min.</i>（線形、5.69 cm<sup>-1</sup>/GPa）
   [DOI: 10.2138/am.2013.4143](https://doi.org/10.2138/am.2013.4143)
 
   $$
   P = \frac{\nu - \nu_0}{5.69}
   $$
 
-- **Takahashi et al. 2024** — <i>J. Raman Spectrosc.</i>（線形、5.48 cm⁻¹/GPa）
+- **Takahashi et al. 2024** — <i>J. Raman Spectrosc.</i>（線形、5.48 cm<sup>-1</sup>/GPa）
   [DOI: 10.1002/jrs.6663](https://doi.org/10.1002/jrs.6663)
 
   $$

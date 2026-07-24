@@ -8,19 +8,17 @@ description: 圧力計算ウィンドウで使えるセンサー・圧力スケ�
 
 高圧実験で用いる各種センサー（蛍光・Ramanシフト）の測定ピーク位置から圧力を求める、「圧力計算ウィンドウ」
 （メイン画面の「Open pressure calculator」ボタン、またはAnalysis Modeの右側パネル）についてまとめます。
-具体的な計算式・係数は `src/core/pressureCalc.py` の `PressureCalculator` クラスに実装されており、
-対応する文献情報の多くは[README_ja.md](https://github.com/khsacc/FluoRaPressee/blob/main/README_ja.md)の「圧力計算画面」の節にまとめられています。
 
 ## センサーの種類と対応する横軸
 
-圧力計算ウィンドウで選べるセンサーは、横軸のモード（波長 nm / Raman shift cm⁻¹）によって以下のように分かれます。
+圧力計算ウィンドウで選べるセンサーは、横軸のモード（波長 nm / Raman shift cm<sup>-1</sup>）によって以下のように分かれます。
 
-- **波長 (nm) モード・蛍光センサー**: [Ruby](ruby.md)、[Sm²⁺:SrB₄O₇](sm-srb4o7.md)、[Sm²⁺:SrFCl](sm-srfcl.md)、
-  [Sm³⁺:YAG](sm-yag.md)
-- **Raman shift (cm⁻¹) モード・Ramanセンサー**: [¹³C diamond 1st order](diamond-13c.md)、
-  [Cubic BN TO](cubic-bn.md)、[Zircon B1g](zircon.md)、[Quartz 464 cm⁻¹](quartz-464.md)、
-  [Quartz 128 cm⁻¹](quartz-128.md)
-- **Raman shift (cm⁻¹) モード・専用フィットが必要なセンサー**: [Diamond Raman Edge](diamond-raman-edge.md)
+- **波長 (nm) モード・蛍光センサー**: [Ruby](ruby.md)、[Sm<sup>2+</sup>:SrB<sub>4</sub>O<sub>7</sub>](sm-srb4o7.md)、[Sm<sup>2+</sup>:SrFCl](sm-srfcl.md)、
+  [Sm<sup>3+</sup>:YAG](sm-yag.md)
+- **Raman shift (cm<sup>-1</sup>) モード・Ramanセンサー**: [<sup>13</sup>C diamond 1st order](diamond-13c.md)、
+  [Cubic BN TO](cubic-bn.md)、[Zircon B1g](zircon.md)、[Quartz 464 cm<sup>-1</sup>](quartz-464.md)、
+  [Quartz 128 cm<sup>-1</sup>](quartz-128.md)
+- **Raman shift (cm<sup>-1</sup>) モード・専用フィットが必要なセンサー**: [Diamond Raman Edge](diamond-raman-edge.md)
 
 メインウィンドウ／Analysis Modeの横軸モードに応じて、選択できるセンサーが自動的に絞り込まれます。
 
@@ -31,7 +29,7 @@ description: 圧力計算ウィンドウで使えるセンサー・圧力スケ�
 
 - 波長モードの蛍光センサー: $\lambda$ = 現在のピーク位置 (nm)、$\lambda_0$ = ゼロ圧ピーク位置 (nm)、
   $\Delta\lambda = \lambda - \lambda_0$
-- Raman shiftモードのセンサー: $\nu$ = 現在のピーク位置 (cm⁻¹)、$\nu_0$ = ゼロ圧ピーク位置 (cm⁻¹)、
+- Raman shiftモードのセンサー: $\nu$ = 現在のピーク位置 (cm<sup>-1</sup>)、$\nu_0$ = ゼロ圧ピーク位置 (cm<sup>-1</sup>)、
   $\Delta\nu = \nu - \nu_0$
 - $T$ = Current T（現在温度、K）、$T_0$ = Reference T0（基準温度、K）
 - 添字T0付きの $\lambda_{0,T_0}$ / $\nu_{0,T_0}$ は「基準温度 $T_0$ で実測したゼロ圧ピーク位置」、
@@ -87,12 +85,12 @@ $T_0$ での実測値 $\lambda_{0,T_0}$ を基準に差分だけを適用する�
 | センサー | 種類 | 単位 | 圧力スケール数 | 温度補正 |
 |---|---|---|---|---|
 | [Ruby](ruby.md) | 蛍光 | nm | 8 | 任意（6スケールから選択） |
-| [Sm²⁺:SrB₄O₇](sm-srb4o7.md) | 蛍光 | nm | 4 | 任意（2スケールから選択） |
-| [Sm²⁺:SrFCl](sm-srfcl.md) | 蛍光 | nm | 3 | 任意（1スケール） |
-| [Sm³⁺:YAG](sm-yag.md) | 蛍光 | nm | 1 | 任意（1スケール） |
-| [¹³C diamond 1st order](diamond-13c.md) | Raman | cm⁻¹ | 2 | スケールにより異なる（必須・埋め込み／補正手段なし） |
-| [Diamond Raman Edge](diamond-raman-edge.md) | Raman（専用フィット） | cm⁻¹ | 4 | 補正手段なし |
-| [Cubic BN TO](cubic-bn.md) | Raman | cm⁻¹ | 2 | スケールにより異なる（必須／任意） |
-| [Zircon B1g](zircon.md) | Raman | cm⁻¹ | 2 | 任意（2スケール、それぞれ対応する論文とペア） |
-| [Quartz 464 cm⁻¹](quartz-464.md) | Raman | cm⁻¹ | 2 | 任意（1スケール） |
-| [Quartz 128 cm⁻¹](quartz-128.md) | Raman | cm⁻¹ | 1 | 必須（埋め込み、T0固定） |
+| [Sm<sup>2+</sup>:SrB<sub>4</sub>O<sub>7</sub>](sm-srb4o7.md) | 蛍光 | nm | 4 | 任意（2スケールから選択） |
+| [Sm<sup>2+</sup>:SrFCl](sm-srfcl.md) | 蛍光 | nm | 3 | 任意（1スケール） |
+| [Sm<sup>3+</sup>:YAG](sm-yag.md) | 蛍光 | nm | 1 | 任意（1スケール） |
+| [<sup>13</sup>C diamond 1st order](diamond-13c.md) | Raman | cm<sup>-1</sup> | 2 | スケールにより異なる（必須・埋め込み／補正手段なし） |
+| [Diamond Raman Edge](diamond-raman-edge.md) | Raman（専用フィット） | cm<sup>-1</sup> | 4 | 補正手段なし |
+| [Cubic BN TO](cubic-bn.md) | Raman | cm<sup>-1</sup> | 2 | スケールにより異なる（必須／任意） |
+| [Zircon B1g](zircon.md) | Raman | cm<sup>-1</sup> | 2 | 任意（2スケール、それぞれ対応する論文とペア） |
+| [Quartz 464 cm<sup>-1</sup>](quartz-464.md) | Raman | cm<sup>-1</sup> | 2 | 任意（1スケール） |
+| [Quartz 128 cm<sup>-1</sup>](quartz-128.md) | Raman | cm<sup>-1</sup> | 1 | 必須（埋め込み、T0固定） |

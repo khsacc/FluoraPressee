@@ -4,7 +4,7 @@ title: Ruby
 description: Cr3+:Al2O3（ルビー）R1蛍光線による圧力スケールと温度補正
 ---
 
-# Ruby（Cr³⁺:Al₂O₃）
+# Ruby（Cr<sup>3+</sup>:Al<sub>2</sub>O<sub>3</sub>）
 
 - 種類: 蛍光 (fluorescence)
 - 横軸単位: nm（R1線の波長）
@@ -90,7 +90,7 @@ description: Cr3+:Al2O3（ルビー）R1蛍光線による圧力スケールと�
 
 各スケールの $f(T)$（[圧力計算の共通の考え方](index.md#圧力計算の共通の考え方表記)のオフセット補正式
 $\lambda_0(T) = \lambda_{0,T_0} + [f(T)-f(T_0)]$ に代入するモデル関数）は次の通りです。Kobayashi・
-Yen and Nicolの2スケールは波数 $\tilde\nu = 10^7/\lambda$（cm⁻¹）の領域で補正を行い、最後に
+Yen and Nicolの2スケールは波数 $\tilde\nu = 10^7/\lambda$（cm<sup>-1</sup>）の領域で補正を行い、最後に
 $\lambda = 10^7/\tilde\nu$ でnmへ戻します。
 
 - **Kobayashi et al., unpublished** — Debyeモデルによる格子シフト（$f(T)$ は $\tilde\nu$ の補正量）
@@ -99,7 +99,7 @@ $\lambda = 10^7/\tilde\nu$ でnmへ戻します。
   f(T) = \alpha \left(\frac{T}{\Theta}\right)^{4} \int_0^{\Theta/T} \frac{x^3}{e^x - 1}\,dx
   $$
 
-  $\alpha = -458.9$ cm⁻¹、$\Theta = 794.0$ K
+  $\alpha = -458.9$ cm<sup>-1</sup>、$\Theta = 794.0$ K
 
 - **Yen and Nicol 1992** — Debyeモデルによる格子シフト（$f(T)$ は $\tilde\nu$ の補正量）
 
@@ -107,9 +107,9 @@ $\lambda = 10^7/\tilde\nu$ でnmへ戻します。
   f(T) = \alpha \left(\frac{T}{\Theta}\right)^{4} \int_0^{\Theta/T} \frac{x^3}{e^x - 1}\,dx
   $$
 
-  $\alpha = -419$ cm⁻¹、$\Theta = 760$ K
+  $\alpha = -419$ cm<sup>-1</sup>、$\Theta = 760$ K
 
-- **Ragan et al. 1992** — 絶対波数モデル（$\tilde\nu$ 領域、単位 cm⁻¹）
+- **Ragan et al. 1992** — 絶対波数モデル（$\tilde\nu$ 領域、単位 cm<sup>-1</sup>）
 
   $$
   \tilde\nu(T) = 14423 + 4.49\times10^{-2}T - 4.81\times10^{-4}T^2 + 3.71\times10^{-7}T^3

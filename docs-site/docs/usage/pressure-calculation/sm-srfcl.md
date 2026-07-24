@@ -4,7 +4,7 @@ title: Sm2+:SrFCl
 description: Sm2+:SrFCl 蛍光線による圧力スケールと温度補正
 ---
 
-# Sm²⁺:SrFCl
+# Sm<sup>2+</sup>:SrFCl
 
 - 種類: 蛍光 (fluorescence)
 - 横軸単位: nm
@@ -47,14 +47,14 @@ Lorenz et al. (1994) スケールは、圧力が10 GPaを境に異なる指数 $
 | Lorenz et al. 1994（Debye型格子シフト＋一フォノン結合モデル） | 20 – 650 K |
 
 [圧力計算の共通の考え方](index.md#圧力計算の共通の考え方表記)のオフセット補正式
-$\lambda_0(T) = \lambda_{0,T_0} + [f(T)-f(T_0)]$ を波数 $\tilde\nu = 10^7/\lambda_0$（cm⁻¹）の領域で適用します。$f(T)$ はDebye型格子シフトと一フォノン結合シフトの和です。
+$\lambda_0(T) = \lambda_{0,T_0} + [f(T)-f(T_0)]$ を波数 $\tilde\nu = 10^7/\lambda_0$（cm<sup>-1</sup>）の領域で適用します。$f(T)$ はDebye型格子シフトと一フォノン結合シフトの和です。
 
 $$
 f(T) = \alpha\left(\frac{T}{\Theta_D}\right)^{4}\int_0^{\Theta_D/T}\frac{x^3}{e^x-1}\,dx
       \;+\; \beta\left(\frac{T}{T_e}\right)^{2}\,\mathrm{P.V.}\!\int_0^{\Theta_D/T}\frac{x^3}{(e^x-1)(x+c)}\,dx
 $$
 
-$\alpha = 97.0$ cm⁻¹、$\Theta_D = 538.0$ K、$\beta = 2.4$ cm⁻¹、$T_e = 412$ K、$c = T_e/\Theta_D$
+$\alpha = 97.0$ cm<sup>-1</sup>、$\Theta_D = 538.0$ K、$\beta = 2.4$ cm<sup>-1</sup>、$T_e = 412$ K、$c = T_e/\Theta_D$
 （第2項は $x=c$ に極をもつコーシー主値積分）。補正後は $\lambda_0(T) = 10^7/\tilde\nu(T)$ でnmに戻します。
 
 ## 注意点

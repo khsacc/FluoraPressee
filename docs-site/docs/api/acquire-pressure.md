@@ -53,7 +53,7 @@ description: 取得・フィッティングに圧力算出を追加するエン�
 ダブルピークフィットの場合、圧力計算にはPeak1（較正済みx軸で値が小さい方の
 主ピーク）が使われます。
 横軸がpixelの場合は圧力計算できないため`400 Bad Request`を返します。また、`sensor`が
-期待する単位（nm/cm⁻¹）と現在有効なcalibrationの軸単位が一致しない場合
+期待する単位（nm/cm<sup>-1</sup>）と現在有効なcalibrationの軸単位が一致しない場合
 （例: Wavelength calibrationが有効な状態でRaman系sensorを指定した場合）も同様に
 `400 Bad Request`になります。校正のaxis_kindと単位を暗黙に変換することはありません
 （[Configuration関連エンドポイント](configurations.md)参照）。

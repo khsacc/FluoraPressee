@@ -247,6 +247,12 @@ class SpectrometerGUI(QMainWindow, ConfigMixin, FileIOMixin, SpectrometerControl
         self.image_view.ui.roiBtn.hide()
         self.image_view.ui.menuBtn.hide()
         self.image_view.getImageItem().setBorder(pg.mkPen('w', width=1))
+        # pg.ImageView forces setAspectLocked(True) on the view it's given; with the
+        # zero-margin setLimits() applied per-frame in DisplayMixin.update_display,
+        # aspect-locked autoRange can't letterbox to fit non-square sensor images, so
+        # "View All" crops part of the image instead of showing it all. Unlock aspect
+        # so the full image always fits the panel.
+        self.image_view.getView().setAspectLocked(False)
         self.image_view.getView().setDefaultPadding(0)
         self.image_view.getView().setLabel('bottom', 'Pixel')
         self.image_view.getView().setLabel('left', 'Pixel')

@@ -7,8 +7,8 @@ description: ダイヤモンドアンビル自身の1次ラマンエッジ位置
 # Diamond Raman edge
 
 - 種類: Raman（ダイヤモンドアンビル自身の高波数側ラマンエッジ位置を使う、専用の測定種別）
-- 横軸単位: cm⁻¹
-- ゼロ圧ピーク位置の初期値: 1334.0 cm⁻¹
+- 横軸単位: cm<sup>-1</sup>
+- ゼロ圧ピーク位置の初期値: 1334.0 cm<sup>-1</sup>
 
 :::caution
 このセンサーを使うには、フィッティング設定の「Fit Function」で **Diamond Raman Edge** を選ぶ必要が
@@ -28,7 +28,7 @@ Pressure Scaleも本ページのDiamond Raman Edge系スケールのいずれか
   P = k_0\,x\left[1 + \tfrac{1}{2}(k_0' - 1)\,x\right],\quad x = \frac{\nu}{\nu_0} - 1
   $$
 
-  $\nu_0 = 1334.0$ cm⁻¹、$k_0 = 575.0(7.0)$、$k_0' = 3.3(0.1)$
+  $\nu_0 = 1334.0$ cm<sup>-1</sup>、$k_0 = 575.0(7.0)$、$k_0' = 3.3(0.1)$
 
 - **Eremets et al. 2023** — Eremets, M.I., Minkov, V.S., Kong, P.P. et al., "Universal diamond edge
   Raman scale to 0.5 terapascal and implications for the metallization of hydrogen,"
@@ -39,7 +39,7 @@ Pressure Scaleも本ページのDiamond Raman Edge系スケールのいずれか
   P = a\,x + b\,x^{2},\quad x = \frac{\nu}{\nu_0} - 1
   $$
 
-  $\nu_0 = 1332.5$ cm⁻¹、$a = 517.0$、$b = 764.0$
+  $\nu_0 = 1332.5$ cm<sup>-1</sup>、$a = 517.0$、$b = 764.0$
 
 - **Akahama and Kawamura 2006** — Yuichi Akahama and Haruki Kawamura, "Pressure calibration of
   diamond anvil Raman gauge to 410 GPa," <i>J. Appl. Phys.</i> 100, 043516 (2006).
@@ -49,7 +49,7 @@ Pressure Scaleも本ページのDiamond Raman Edge系スケールのいずれか
   P = k_0\,x\left[1 + \tfrac{1}{2}(k_0' - 1)\,x\right],\quad x = \frac{\nu}{\nu_0} - 1
   $$
 
-  $\nu_0 = 1334.0$ cm⁻¹、$k_0 = 547.0(11.0)$、$k_0' = 3.75(0.20)$
+  $\nu_0 = 1334.0$ cm<sup>-1</sup>、$k_0 = 547.0(11.0)$、$k_0' = 3.75(0.20)$
 
 - **Akahama and Kawamura 2010** — Yuichi Akahama and Haruki Kawamura, "Pressure calibration of
   diamond anvil Raman gauge to 410 GPa," <i>J. Phys.: Conf. Ser.</i> 215, 012195 (2010), quadratic
@@ -62,15 +62,15 @@ Pressure Scaleも本ページのDiamond Raman Edge系スケールのいずれか
   P = c_0 + c_1\,\nu + c_2\,\nu^{2}
   $$
 
-  $c_0 = 3141(3)$、$c_1 = -4.157(20)$、$c_2 = 1.429(12)\times10^{-3}$。$\nu_0 = 1334.0$ cm⁻¹は他
+  $c_0 = 3141(3)$、$c_1 = -4.157(20)$、$c_2 = 1.429(12)\times10^{-3}$。$\nu_0 = 1334.0$ cm<sup>-1</sup>は他
   スケールとの表示上の整合のために示しているだけで、この式自体には使われません。
 
-| スケール | 基準エッジ位置 ν0 (cm⁻¹) | 式の形 |
+| スケール | 基準エッジ位置 ν0 (cm<sup>-1</sup>) | 式の形 |
 |---|---|---|
 | Hilberer et al. 2026 | 1334.0 | k0 = 575.0(7.0), k0' = 3.3(0.1) |
 | Eremets et al. 2023 | 1332.5 | 2次式（a = 517.0, b = 764.0） |
 | Akahama and Kawamura 2006 | 1334.0 | k0 = 547.0(11.0), k0' = 3.75(0.20) |
-| Akahama and Kawamura 2010 | 1334.0（表示のみ、式には不使用） | 絶対波数ωの2次式：P = c0 + c1・ω + c2・ω²、c0 = 3141(3)、c1 = -4.157(20)、c2 = 1.429(12)×10⁻³ |
+| Akahama and Kawamura 2010 | 1334.0（表示のみ、式には不使用） | 絶対波数ωの2次式：P = c0 + c1・ω + c2・ω<sup>2</sup>、c0 = 3141(3)、c1 = -4.157(20)、c2 = 1.429(12)×10<sup>-3</sup> |
 
 ## 温度補正
 
@@ -91,14 +91,14 @@ Pressure Scaleも本ページのDiamond Raman Edge系スケールのいずれか
 2. **微分専用の平滑化**: 等間隔化した強度にSavitzky-Golayフィルタ（`scipy.signal.savgol_filter`）を
    かけます。この平滑化は数値微分のノイズを抑えるためだけに使い、表示される「フィット曲線」自体も
    この平滑化後の強度です（生の強度をそのままフィットしているわけではありません）。窓幅は
-   `EDGE_SMOOTH_WIDTH`（2.0 cm⁻¹）をグリッド間隔で割った値を基準に、5点以上・`EDGE_MAX_SMOOTH_WINDOW`
+   `EDGE_SMOOTH_WIDTH`（2.0 cm<sup>-1</sup>）をグリッド間隔で割った値を基準に、5点以上・`EDGE_MAX_SMOOTH_WINDOW`
    （51点）以下・奇数になるよう調整されます。
 3. **数値微分とエッジ候補の探索**: `np.gradient` で微分し、符号を反転して $-dI/d\nu$ を得ます。
    Savitzky-Golayや数値微分はROI（フィット範囲）の端で精度が落ちるため、両端（窓幅の半分・最低2点・
    全点数の1/4を超えない範囲）を探索対象から除外したうえで $-dI/d\nu$ が最大になる点を、エッジ位置の
    初期値とします。これにより、ユーザーが指定したROIの端がダイヤモンドエッジ本体と誤認識されるのを
    防いでいます。
-4. **エッジ近傍だけを切り出してフィット**: 上記の初期値を中心に ±`EDGE_LOCAL_HALF_WIDTH`（6.0 cm⁻¹）
+4. **エッジ近傍だけを切り出してフィット**: 上記の初期値を中心に ±`EDGE_LOCAL_HALF_WIDTH`（6.0 cm<sup>-1</sup>）
    の範囲（最低12点。点数が足りなければ自動的に拡張）だけを切り出し、ROI全体ではなくこの局所領域だけ
    を実際のフィット対象にします。
 5. **Pseudo-Voigt + 線形ベースラインでフィット**: 切り出した $-dI/d\nu$ を、Pseudo-Voigt関数（振幅・

@@ -4,16 +4,16 @@ title: 13C diamond 1st order
 description: 13Cダイヤモンド1次ラマン線による圧力スケールと温度補正
 ---
 
-# ¹³C diamond 1st order
+# <sup>13</sup>C diamond 1st order
 
 - 種類: Raman
-- 横軸単位: cm⁻¹
-- ゼロ圧ピーク位置の初期値: 1287.79 cm⁻¹（あくまで初期値です。実際の測定系・試料で測ったゼロ圧位置に
+- 横軸単位: cm<sup>-1</sup>
+- ゼロ圧ピーク位置の初期値: 1287.79 cm<sup>-1</sup>（あくまで初期値です。実際の測定系・試料で測ったゼロ圧位置に
   置き換えてください）
 
 ## 圧力スケール（2種類）
 
-- **Schiferl et al. 1997** — <i>J. Appl. Phys.</i>（線形、2.83 cm⁻¹/GPa、温度補正は任意）
+- **Schiferl et al. 1997** — <i>J. Appl. Phys.</i>（線形、2.83 cm<sup>-1</sup>/GPa、温度補正は任意）
   [DOI: 10.1063/1.366268](https://doi.org/10.1063/1.366268)
 
   $$
@@ -28,7 +28,7 @@ description: 13Cダイヤモンド1次ラマン線による圧力スケールと
   P = \frac{(\nu - \nu_{0,T_0}) + a\,T + b\,T^{2}}{c}
   $$
 
-  $a = 1.65\times10^{-2}$ cm⁻¹/K、$b = 1.769\times10^{-5}$ cm⁻¹/K²、$c = 2.707$ cm⁻¹/GPa、
+  $a = 1.65\times10^{-2}$ cm<sup>-1</sup>/K、$b = 1.769\times10^{-5}$ cm<sup>-1</sup>/K<sup>2</sup>、$c = 2.707$ cm<sup>-1</sup>/GPa、
   $T$ = Current T（K）。$\nu_{0,T_0}$ は基準温度 $T_0 = 298.15$ K でのゼロ圧ピーク位置で、
   この式では温度補正（オフセット式）を経由せず直接使われます。
 

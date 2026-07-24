@@ -58,7 +58,7 @@ description: データを1回取得するエンドポイント
   "x_axis": {"source": "calibrated", "unit": "nm", "calibrated": true}
 }
 ```
-- `x` は較正済みなら較正後の単位（nm または cm⁻¹）、未較正ならpixel番号（Ocean Optics等
+- `x` は較正済みなら較正後の単位（nm または cm<sup>-1</sup>）、未較正ならpixel番号（Ocean Optics等
   ネイティブ波長軸を持つ機種では、FluoraPressée較正が無くてもその軸を返します）。GUIの
   "Flip X-axis" 設定には依存せず、常に昇順で返します。
 - `y_raw` は生データ、`y` はdark減算後（`dark.mode="none"` の場合は `y_raw` と同じ）。
