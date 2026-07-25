@@ -9,6 +9,8 @@ description: 圧力計算ウィンドウで使えるセンサー・圧力スケ�
 高圧実験で用いる各種センサー（蛍光・Ramanシフト）の測定ピーク位置から圧力を求める、「圧力計算ウィンドウ」
 （メイン画面の「Open pressure calculator」ボタン、またはAnalysis Modeの右側パネル）についてまとめます。
 
+![](../../../static/img/usage_pressure_calculator.jpg)
+
 ## センサーの種類と対応する横軸
 
 圧力計算ウィンドウで選べるセンサーは、横軸のモード（波長 nm / Raman shift cm<sup>-1</sup>）によって以下のように分かれます。

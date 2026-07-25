@@ -1,5 +1,5 @@
 ---
-sidebar_position: 11
+sidebar_position: 5
 title: Sm3+:YAG
 description: Sm3+:YAG（Y1線）蛍光線による圧力スケールと温度補正
 ---

@@ -1,5 +1,5 @@
 ---
-sidebar_position: 9
+sidebar_position: 10
 title: Quartz 464 cm-1
 description: 石英464 cm-1モードによる圧力スケールと温度補正
 ---

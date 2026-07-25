@@ -1,5 +1,5 @@
 ---
-sidebar_position: 5
+sidebar_position: 6
 title: 13C diamond 1st order
 description: 13Cダイヤモンド1次ラマン線による圧力スケールと温度補正
 ---
