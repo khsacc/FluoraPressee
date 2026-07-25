@@ -11,7 +11,8 @@ description: 回折格子・中心波長の制御と、横軸較正の流れ
 
 ## 回折格子・中心波長の制御
 
-パネルには以下のコントロールがあります。
+<img src={require('@site/static/img/usage_configuration.jpg').default} style={{maxWidth: '480px'}} />
+
 
 - **Grating (grooves/mm)**: 使用する回折格子。
   表示はgrooves/mm値ですが、実際に分光器へ送られるのは[Hardware Configurationのgrating一覧](menu/hardware/hardware-configuration.md)で定義した物理タレット番号です。

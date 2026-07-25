@@ -1,5 +1,7 @@
 # FluoRaPressée: Spectrometer Control & Analysis GUI
 
+<img src="./logo/Large_logo.jpg" width="50%">
+
 * Author: Hiroki Kobayashi (Geochemical Research Center, The University of Tokyo). 
     * https://orcid.org/0000-0002-3682-7558 
     * E-mail as of 2026: hiroki (at) eqchem.s.u-tokyo.ac.jp
@@ -79,50 +81,6 @@ Analysis Modeの起動には、カメラ・分光器の接続、装置SDK、``sp
 cd docs-site
 NODENV_VERSION=22.22.0 npm start
 ```
-
-## スクリーンショット
-
-
-### メイン画面
-
-![](docs-site/static/img/manual/MainWindowFull.jpg)
-
-* スペクトルの取得、保存
-    * 単発測定および連続測定
-    * インターバルを指定した連続保存・連続解析もできます。
-* 分光器の基本的な制御（回折格子の変更、中心位置の変更）
-* ROI の設定、イメージモード（CCDで取得した画像をそのまま出力）への切り替え
-* バックグラウンドの取得と差し引き
-* ピーク函数を用いたフィッティング
-* 圧力計算ウィンドウを開く
-
-
-
-### 横軸較正画面（「Calibrate x-axis」ボタンをクリックして開く）
-
-![](docs-site/static/img/manual/CalibrationWindow.png)
-
-* 標準試料のスペクトルを取得し、ピーク検索、Gaussian函数によるピークフィット、波長の較正までを行えます。
-
-
-### 横軸較正補助画面
-
-![](docs-site/static/img/manual/CalibrationHelperWindow.png)
-
-* よく使うネオンの波長領域のスペクトル（事前に測定してプログラム中に保存したもの）を表示してピークの帰属の参考にできます。
-
-
-### フィッティング
-
-* Pseudo-Voigt, Moffat, Gaussian, Lorenzian の4種類の関数に対応
-* ピーク数の最大は５まで。
-
-
-
-### 圧力計算画面（「Open pressure calculator」ボタンをクリックして開く）
-
-![](docs-site/static/img/manual/PressureCalculator.png)
-
 
 
 

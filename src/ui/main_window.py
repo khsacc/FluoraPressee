@@ -491,7 +491,7 @@ class SpectrometerGUI(QMainWindow, ConfigMixin, FileIOMixin, SpectrometerControl
         bg_group.setLayout(bg_layout)
         controls_layout.addWidget(bg_group)
 
-        roi_group = QGroupBox("Display ROI Settings")
+        roi_group = QGroupBox("ROI Settings")
         roi_layout = QVBoxLayout()
         self.radio_2d = QRadioButton("2D Image View")
         self.radio_1d_full = QRadioButton("1D Spectrum (Full Range Binning)")

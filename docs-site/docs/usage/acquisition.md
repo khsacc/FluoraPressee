@@ -6,9 +6,12 @@ description: 露光時間・積算回数・ROIの設定
 
 # 露光・保存
 
-露光に関する設定、2次元検出器のROIに関する設定、およびbackgroundの差し引きに関する設定は、それぞれ **Measurement**・**Display ROI Settings**・**Background** から行います。
+露光に関する設定、2次元検出器のROIに関する設定、およびbackgroundの差し引きに関する設定は、それぞれ **Measurement**・**ROI Settings**・**Background** から行います。
 
-![](../../static/img/usage_acquisition_measurement.jpg)
+
+<img src={require('@site/static/img/usage_acquisition.jpg').default} style={{maxWidth: '480px'}} />
+
+
 
 ## 露光時間
 
@@ -37,7 +40,7 @@ description: 露光時間・積算回数・ROIの設定
 
 ## ROI
 
-**Display ROI Settings** パネルで、検出器のどの範囲をどう読み出すかを選びます。
+**ROI Settings** パネルで、検出器のどの範囲をどう読み出すかを選びます。
 
 - **2D Image View**: 検出器の生の2Dイメージをそのまま表示します（垂直方向のビニングなし）。
 - **1D Spectrum (Full Range Binning)**: 検出器の全行を1本のスペクトルに合算します。
