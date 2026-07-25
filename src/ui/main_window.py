@@ -468,99 +468,9 @@ class SpectrometerGUI(QMainWindow, ConfigMixin, FileIOMixin, SpectrometerControl
         meas_group.setLayout(meas_layout)
         controls_layout.addWidget(meas_group)
 
-        spec_group = QGroupBox("Spectrometer Configurations")
-        spec_layout = QGridLayout()
-
-        self.btn_load_configuration = QPushButton("Load previous configuration")
-        self._set_button_style(self.btn_load_configuration, self.BUTTON_STYLE_PURPLE)
-        self.lbl_notes_calib_loading = QLabel('Loading a configuration will change the grating, centre, ROI, and x-axis calibration.')
-        self.lbl_notes_calib_loading.setStyleSheet("font-style: italic;")
-        self.lbl_notes_calib_loading.setWordWrap(True) # Enable word wrap to prevent layout overflow
-        
-        self.lbl_loaded_configuration = QLabel("Loaded: None")
-        self.lbl_loaded_configuration.setStyleSheet("color: #333; font-size: 12px; font-weight: bold; margin-bottom: 10px;")
-        self.lbl_loaded_configuration.setWordWrap(True)
-        
-        self.grating_list = [str(g.get("grooves")) for g in self.config.get("grating", [])]
-        self.combo_grating = CustomComboBox()
-        self.combo_grating.addItems(self.grating_list)
-        
-        spec_radio_layout = QHBoxLayout()
-        self.radio_spec_mode_wl = QRadioButton("Wavelength")
-        self.radio_spec_mode_raman = QRadioButton("Raman shift")
-        self.radio_spec_mode_wl.setChecked(True)
-        spec_radio_layout.addWidget(self.radio_spec_mode_wl)
-        spec_radio_layout.addWidget(self.radio_spec_mode_raman)
-        
-        self.lbl_centre = QLabel("Centre (nm):")
-        self.spin_centre_wl = CustomDoubleSpinBox()
-        self.spin_centre_wl.setRange(-10000, 20000)
-        self.spin_centre_wl.setValue(694.0)
-        
-        self.lbl_exc_wl = QLabel("Excitation wavelength (nm):")
-        self.spin_exc_wl = CustomDoubleSpinBox()
-        self.spin_exc_wl.setRange(0.01, 2000)
-        self.spin_exc_wl.setDecimals(3)
-        self.spin_exc_wl.setValue(532.0)
-        self.spin_exc_wl.setEnabled(False)
-        
-        self.btn_apply_spec = QPushButton("Apply")
-        self.btn_apply_spec.setEnabled(False)
-        self._set_button_style(self.btn_apply_spec, self.BUTTON_STYLE_LINK)
-        
-        self.btn_calib_neon = QPushButton("Calibrate x-axis")
-        
-        spec_layout.addWidget(self.btn_load_configuration, 0, 0, 1, 2)
-        spec_layout.addWidget(self.lbl_notes_calib_loading, 1, 0, 1, 2)
-        spec_layout.addWidget(self.lbl_loaded_configuration, 2, 0, 1, 2)
-        
-        self.lbl_grating = QLabel("Grating (grooves/mm):")
-        spec_layout.addWidget(self.lbl_grating, 3, 0)
-        spec_layout.addWidget(self.combo_grating, 3, 1)
-        spec_layout.addLayout(spec_radio_layout, 4, 0, 1, 2)
-        spec_layout.addWidget(self.lbl_centre, 5, 0)
-        spec_layout.addWidget(self.spin_centre_wl, 5, 1)
-        spec_layout.addWidget(self.lbl_exc_wl, 6, 0)
-        spec_layout.addWidget(self.spin_exc_wl, 6, 1)
-        spec_layout.addWidget(self.btn_apply_spec, 7, 0, 1, 2)
-        spec_layout.addWidget(self.btn_calib_neon, 8, 0, 1, 2)
-        
-        spec_group.setLayout(spec_layout)
-        controls_layout.addWidget(spec_group)
-
-        roi_group = QGroupBox("Display ROI Settings")
-        roi_layout = QVBoxLayout()
-        self.radio_2d = QRadioButton("2D Image View")
-        self.radio_1d_full = QRadioButton("1D Spectrum (Full Range Binning)")
-        self.radio_1d_roi = QRadioButton("1D Spectrum (Custom ROI)")
-        self.radio_1d_roi.setChecked(True)
-        roi_layout.addWidget(self.radio_2d)
-        roi_layout.addWidget(self.radio_1d_full)
-        roi_layout.addWidget(self.radio_1d_roi)
-        
-        self.chk_flip_x = QCheckBox("Flip X-axis")
-        self.chk_flip_x.setChecked(self.config.get("flip_x", False))
-        roi_layout.addWidget(self.chk_flip_x)
-        
-        roi_spin_layout = QHBoxLayout()
-        self.lbl_roi_start = QLabel("Start Row:")
-        roi_spin_layout.addWidget(self.lbl_roi_start)
-        self.spin_vstart = CustomSpinBox()
-        self.spin_vstart.setMaximum(4000)
-        roi_spin_layout.addWidget(self.spin_vstart)
-
-        self.lbl_roi_end = QLabel("End Row:")
-        roi_spin_layout.addWidget(self.lbl_roi_end)
-        self.spin_vend = CustomSpinBox()
-        self.spin_vend.setMaximum(4000) 
-        roi_spin_layout.addWidget(self.spin_vend)
-        roi_layout.addLayout(roi_spin_layout)
-        roi_group.setLayout(roi_layout)
-        controls_layout.addWidget(roi_group)
-
         bg_group = QGroupBox("Background")
         bg_layout = QGridLayout()
-        
+
         bg_radio_layout = QHBoxLayout()
         self.radio_bg_on = QRadioButton("ON")
         self.radio_bg_off = QRadioButton("OFF")
@@ -580,6 +490,96 @@ class SpectrometerGUI(QMainWindow, ConfigMixin, FileIOMixin, SpectrometerControl
         bg_layout.addWidget(self.lbl_loaded_bg, 3, 0, 1, 2)
         bg_group.setLayout(bg_layout)
         controls_layout.addWidget(bg_group)
+
+        roi_group = QGroupBox("Display ROI Settings")
+        roi_layout = QVBoxLayout()
+        self.radio_2d = QRadioButton("2D Image View")
+        self.radio_1d_full = QRadioButton("1D Spectrum (Full Range Binning)")
+        self.radio_1d_roi = QRadioButton("1D Spectrum (Custom ROI)")
+        self.radio_1d_roi.setChecked(True)
+        roi_layout.addWidget(self.radio_2d)
+        roi_layout.addWidget(self.radio_1d_full)
+        roi_layout.addWidget(self.radio_1d_roi)
+
+        self.chk_flip_x = QCheckBox("Flip X-axis")
+        self.chk_flip_x.setChecked(self.config.get("flip_x", False))
+        roi_layout.addWidget(self.chk_flip_x)
+
+        roi_spin_layout = QHBoxLayout()
+        self.lbl_roi_start = QLabel("Start Row:")
+        roi_spin_layout.addWidget(self.lbl_roi_start)
+        self.spin_vstart = CustomSpinBox()
+        self.spin_vstart.setMaximum(4000)
+        roi_spin_layout.addWidget(self.spin_vstart)
+
+        self.lbl_roi_end = QLabel("End Row:")
+        roi_spin_layout.addWidget(self.lbl_roi_end)
+        self.spin_vend = CustomSpinBox()
+        self.spin_vend.setMaximum(4000)
+        roi_spin_layout.addWidget(self.spin_vend)
+        roi_layout.addLayout(roi_spin_layout)
+        roi_group.setLayout(roi_layout)
+        controls_layout.addWidget(roi_group)
+
+        spec_group = QGroupBox("Spectrometer Configurations")
+        spec_layout = QGridLayout()
+
+        self.btn_load_configuration = QPushButton("Load previous configuration")
+        self._set_button_style(self.btn_load_configuration, self.BUTTON_STYLE_PURPLE)
+        self.lbl_notes_calib_loading = QLabel('Loading a configuration will change the grating, centre, ROI, and x-axis calibration.')
+        self.lbl_notes_calib_loading.setStyleSheet("font-style: italic;")
+        self.lbl_notes_calib_loading.setWordWrap(True) # Enable word wrap to prevent layout overflow
+
+        self.lbl_loaded_configuration = QLabel("Loaded: None")
+        self.lbl_loaded_configuration.setStyleSheet("color: #333; font-size: 12px; font-weight: bold; margin-bottom: 10px;")
+        self.lbl_loaded_configuration.setWordWrap(True)
+
+        self.grating_list = [str(g.get("grooves")) for g in self.config.get("grating", [])]
+        self.combo_grating = CustomComboBox()
+        self.combo_grating.addItems(self.grating_list)
+
+        spec_radio_layout = QHBoxLayout()
+        self.radio_spec_mode_wl = QRadioButton("Wavelength")
+        self.radio_spec_mode_raman = QRadioButton("Raman shift")
+        self.radio_spec_mode_wl.setChecked(True)
+        spec_radio_layout.addWidget(self.radio_spec_mode_wl)
+        spec_radio_layout.addWidget(self.radio_spec_mode_raman)
+
+        self.lbl_centre = QLabel("Centre (nm):")
+        self.spin_centre_wl = CustomDoubleSpinBox()
+        self.spin_centre_wl.setRange(-10000, 20000)
+        self.spin_centre_wl.setValue(694.0)
+
+        self.lbl_exc_wl = QLabel("Excitation wavelength (nm):")
+        self.spin_exc_wl = CustomDoubleSpinBox()
+        self.spin_exc_wl.setRange(0.01, 2000)
+        self.spin_exc_wl.setDecimals(3)
+        self.spin_exc_wl.setValue(532.0)
+        self.spin_exc_wl.setEnabled(False)
+
+        self.btn_apply_spec = QPushButton("Apply")
+        self.btn_apply_spec.setEnabled(False)
+        self._set_button_style(self.btn_apply_spec, self.BUTTON_STYLE_LINK)
+
+        self.btn_calib_neon = QPushButton("Calibrate x-axis")
+
+        spec_layout.addWidget(self.btn_load_configuration, 0, 0, 1, 2)
+        spec_layout.addWidget(self.lbl_notes_calib_loading, 1, 0, 1, 2)
+        spec_layout.addWidget(self.lbl_loaded_configuration, 2, 0, 1, 2)
+
+        self.lbl_grating = QLabel("Grating (grooves/mm):")
+        spec_layout.addWidget(self.lbl_grating, 3, 0)
+        spec_layout.addWidget(self.combo_grating, 3, 1)
+        spec_layout.addLayout(spec_radio_layout, 4, 0, 1, 2)
+        spec_layout.addWidget(self.lbl_centre, 5, 0)
+        spec_layout.addWidget(self.spin_centre_wl, 5, 1)
+        spec_layout.addWidget(self.lbl_exc_wl, 6, 0)
+        spec_layout.addWidget(self.spin_exc_wl, 6, 1)
+        spec_layout.addWidget(self.btn_apply_spec, 7, 0, 1, 2)
+        spec_layout.addWidget(self.btn_calib_neon, 8, 0, 1, 2)
+
+        spec_group.setLayout(spec_layout)
+        controls_layout.addWidget(spec_group)
 
         self.fitting_config = FittingConfigWidget(fitting_enabled=False)
         self.fitting_config.expose_controls_on(self)
