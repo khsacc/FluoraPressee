@@ -21,9 +21,7 @@ FluoRaPressée は、装置との堅牢な通信を実現するため、接続�
    Andor・Princeton InstrumentsのDLL/Runtimeパス欄は、ウィザードが裏でよくあるインストール先を自動検索し、見つかった候補を一覧に出します（✓ = ファイルを発見、✗ = 未発見、– = 未チェック）。
    **Read parameters from connected hardware** ボタンを押すと、接続済みの実機から接続情報・grating構成・機種名/シリアル番号を読み取り、各欄に反映します。
    読み取りに失敗した項目があっても手入力にフォールバックするだけで、ウィザードが停止することはありません。
-3. **Grating・検出器設定**: gratingのgrooves/mm（カンマ区切り）、`flip_x`（左右反転表示）、冷却器の目標温度初期値などを設定します。
-   Princeton Instrumentsは指定したCOMポートに対して `?GRATINGS` 照会を試み、成功すればgrating欄を自動的に埋めます。
-   Ocean Opticsは可動gratingも冷却器も持たない固定分光器のため、この画面ではgratingと冷却温度の項目が表示されません。
+3. **Grating・検出器設定**: gratingのgrooves/mm（カンマ区切り）、`flip_x`（左右反転表示）、冷却器の目標温度初期値などを設定します。回折格子に関する情報は、分光器から自動で取得されます。
 
 ウィザードを最後まで完了する（Finish）と、入力内容が `spectrometerConfig.json` としてリポジトリルートに書き込まれます。
 
