@@ -59,7 +59,7 @@ Andor SDKおよびPrinceton Instruments PICam Runtimeを利用した装置制御
 ## 謝辞
 
 FluoRaPressée の「分光器の制御からデータ解析まで一つのアプリケーション内で完結させる」というコンセプトは、[Rubycond](https://github.com/CelluleProjet/Rubycond) というソフトウェアに着想を得たものです。
-Rubycond は、著者が Stefan Klotz 氏との共同研究のため、フランス・パリ ソルボンヌ大学/CNRS/MNMH 鉱物学・物質物理学・宇宙化学研究所  (Institut de minéralogie, de physique des matériaux et de cosmochimie: IMPMC) に滞在していた際、日常的に使用していたソフトであり、この経験の中で、Raman測定への拡張や、さらに大規模プラットフォームへと組み込める API 付きのアプリケーション開発の発想を思いつきました。
+Rubycond は、著者が Stefan Klotz 氏との共同研究のため、フランス・パリ ソルボンヌ大学/CNRS/MNMH 鉱物学・物質物理学・宇宙化学研究所  (Institut de minéralogie, de physique des matériaux et de cosmochimie: IMPMC) に滞在していた際、日常的に使用していたソフトであり、この経験の中で、Raman測定への拡張や、さらに大規模プラットフォームへと組み込める API 付きのアプリケーション開発に関する多くの着想を得ました。
 Rubycondの開発者である、Yiuri Garino・Silvia Boccato両氏に感謝申し上げます。
 
 
