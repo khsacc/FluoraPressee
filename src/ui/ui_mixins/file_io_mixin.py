@@ -282,7 +282,7 @@ class FileIOMixin:
 
     def register_current_configuration(
         self, coeffs, calibration_unit="Wavelength", excitation_wavelength_nm=None,
-        reference_kind=None, standards=None,
+        reference_kind=None, standards=None, raw_spectrum=None,
     ):
         """Create a new active record for the current grating/centre/ROI slot."""
         hardware = self.configuration_hardware_context()
@@ -335,6 +335,12 @@ class FileIOMixin:
                 "coefficients": {
                     "c0": float(c0), "c1": float(c1), "c2": float(c2),
                 },
+                # The measured spectrum the operator fit peaks against, in the
+                # same raw (unflipped) sensor pixel domain as the coefficients
+                # above -- kept as evidence of how this calibration was derived.
+                "raw_spectrum": (
+                    [float(v) for v in raw_spectrum] if raw_spectrum is not None else None
+                ),
             },
         }
         return self.configuration_catalog.register_configuration(draft)

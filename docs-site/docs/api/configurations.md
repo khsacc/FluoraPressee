@@ -31,6 +31,7 @@ calibration係数自体は含みません。
 
 immutableなconfiguration record全体を返します。
 `configuration.calibration.coefficients`を使えば、pixel軸で取得したデータへクライアント側で後から校正を適用できます。
+`configuration.calibration.raw_spectrum`には、この較正のピークをフィットした際の生スペクトル(生センサーpixel順の強度値配列)が含まれます(この情報を持たない旧バージョンのレコードでは`null`)。
 現在の装置との互換性も返します。
 
 ## POST /configurations/resolve

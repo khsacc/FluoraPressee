@@ -215,6 +215,25 @@ class CalibrationUiAssignmentTests(unittest.TestCase):
         for actual, expected in zip(roundtripped, flipped_domain_coeffs):
             self.assertAlmostEqual(actual, expected, places=6)
 
+    def test_raw_domain_spectrum_unchanged_when_not_flipped(self):
+        self.window._spectrum_is_flipped = False
+
+        result = self.window._raw_domain_spectrum()
+
+        np.testing.assert_array_equal(result, self.window.current_spectrum)
+
+    def test_raw_domain_spectrum_undoes_flip(self):
+        self.window._spectrum_is_flipped = True
+
+        result = self.window._raw_domain_spectrum()
+
+        np.testing.assert_array_equal(result, self.window.current_spectrum[::-1])
+
+    def test_raw_domain_spectrum_none_when_no_spectrum_acquired(self):
+        self.window.current_spectrum = None
+
+        self.assertIsNone(self.window._raw_domain_spectrum())
+
     def test_selected_candidate_preview_takes_priority_over_seed_axis(self):
         self.window.initial_wavelength_axis = np.linspace(600.0, 800.0, 1024)
         self.window.match_candidates = [

@@ -23,7 +23,7 @@ description: 取得・フィッティングに圧力算出を追加するエン�
   }
 }
 ```
-- `sensor`/`pressure_scale`: `src/core/pressureCalc.py` の `SENSORS` / `PRESSURE_SCALES` で定義された key。
+- `sensor`/`pressure_scale`: [圧力計算](../usage/pressure-calculation/index.md)に一覧されている圧力マーカー・圧力スケールに対応するkey。
 - Diamond Raman Edge の場合は `sensor: "diamond_raman_edge"` と`diamond_edge_...` スケールを指定します。
   `fit_function: "Diamond Raman Edge"` と通常のピーク圧力スケール、または通常のピークフィットとDiamond Edgeスケールを組み合わせると測定開始前に422エラーになります。
   Edgeスケール固有の `nu0` を使うため、`zero_pressure_peak` の値は計算には使用されません（互換性のためフィールド自体は必須）。
@@ -32,7 +32,7 @@ description: 取得・フィッティングに圧力算出を追加するエン�
   `enabled: false`、または省略した場合は温度補正無しで`zero_pressure_peak` がそのまま使われます。
   `enabled: true` の場合のみ、`scale` に`TEMPERATURE_SCALES` の key を指定し、その温度スケールでゼロ圧力ピークを補正してから圧力を計算します。
   温度が有効範囲外でも計算自体は続行し、`temperature_warning` に警告メッセージが入ります。
-- 圧力スケール側で `T0` が固定されている場合は、リクエスト中の `t0` より`src/core/pressureCalc.py` の定義値が優先されます。
+- 圧力スケール側で `T0` が固定されている場合は、リクエスト中の `t0` よりそのスケールの固定値が優先されます。
 
 **レスポンス**: [`POST /acquire/fit`](acquire-fit.md) のフィールドに `pressure_gpa`, `pressure_err_gpa`, `zero_pressure_peak_at_current_t`, `temperature_warning` を追加。
 ```json

@@ -439,6 +439,16 @@ class CalibrationWindow(QDialog):
             c2,
         )
 
+    def _raw_domain_spectrum(self):
+        """Undo the Flip X this window applied to self.current_spectrum, so it
+        shares the same raw (unflipped) sensor pixel domain as the coefficients
+        _to_raw_pixel_domain() produces -- see that method's docstring."""
+        if self.current_spectrum is None:
+            return None
+        if not self._spectrum_is_flipped:
+            return self.current_spectrum
+        return self.current_spectrum[::-1]
+
     def on_data_ready(self, mode, data):
         if self.is_acquiring and mode == "1d":
             flipped = self._flip_x_enabled()
@@ -1544,6 +1554,7 @@ class CalibrationWindow(QDialog):
                 excitation_wavelength_nm=calib_laser_wl,
                 reference_kind=reference_kind,
                 standards=used_standards,
+                raw_spectrum=self._raw_domain_spectrum(),
             )
             label = format_configuration_label(record)
             main_window.apply_calibration(

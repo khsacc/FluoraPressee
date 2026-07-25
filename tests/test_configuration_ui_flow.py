@@ -155,6 +155,20 @@ class ConfigurationUiFlowTests(unittest.TestCase):
         self.assertEqual(record["detector"]["roi_start"], 45)
         self.assertNotIn("exposure_time_s", record)
 
+    def test_register_stores_raw_spectrum_used_for_calibration(self):
+        import numpy as np
+
+        record = self.window.register_current_configuration(
+            (1.0, 2.0, 3.0), raw_spectrum=np.array([10.0, 20.5, 30.0])
+        )
+
+        self.assertEqual(record["calibration"]["raw_spectrum"], [10.0, 20.5, 30.0])
+
+    def test_register_leaves_raw_spectrum_none_when_not_supplied(self):
+        record = self.window.register_current_configuration((1.0, 2.0, 3.0))
+
+        self.assertIsNone(record["calibration"]["raw_spectrum"])
+
     def test_prepare_loads_complete_configuration_and_defers_calibration_until_move(self):
         record = self.window.register_current_configuration((1.0, 2.0, 3.0))
         self.window.combo_grating.setCurrentIndex(1)

@@ -803,6 +803,42 @@ class ConfigurationCatalogTests(unittest.TestCase):
         with self.assertRaises(ConfigurationValidationError):
             self.catalog.register_configuration(bad)
 
+    def test_raw_spectrum_is_stored_when_supplied(self):
+        raw = draft(unit="Wavelength")
+        raw["calibration"]["raw_spectrum"] = [100.0, 250.5, 98.2]
+        record = self.catalog.register_configuration(raw)
+        loaded = self.catalog.get_configuration(record["configuration_id"])
+
+        self.assertEqual(loaded["calibration"]["raw_spectrum"], [100.0, 250.5, 98.2])
+
+    def test_raw_spectrum_defaults_to_none_when_omitted(self):
+        record = self.catalog.register_configuration(draft(unit="Wavelength"))
+        loaded = self.catalog.get_configuration(record["configuration_id"])
+
+        self.assertIsNone(loaded["calibration"]["raw_spectrum"])
+
+    def test_raw_spectrum_must_be_a_non_empty_list(self):
+        bad = draft(unit="Wavelength")
+        bad["calibration"]["raw_spectrum"] = []
+        with self.assertRaises(ConfigurationValidationError):
+            self.catalog.register_configuration(bad)
+
+        bad = draft(unit="Wavelength")
+        bad["calibration"]["raw_spectrum"] = 123.0
+        with self.assertRaises(ConfigurationValidationError):
+            self.catalog.register_configuration(bad)
+
+    def test_raw_spectrum_must_contain_only_finite_numbers(self):
+        bad = draft(unit="Wavelength")
+        bad["calibration"]["raw_spectrum"] = [1.0, float("nan"), 2.0]
+        with self.assertRaises(ConfigurationValidationError):
+            self.catalog.register_configuration(bad)
+
+        bad = draft(unit="Wavelength")
+        bad["calibration"]["raw_spectrum"] = [1.0, float("inf"), 2.0]
+        with self.assertRaises(ConfigurationValidationError):
+            self.catalog.register_configuration(bad)
+
     def test_fresh_v3_database_accepts_first_registration(self):
         # Regression test: the calibration_profiles table and
         # configurations.calibration_profile_id column must exist in the

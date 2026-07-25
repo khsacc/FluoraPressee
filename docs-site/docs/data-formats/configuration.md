@@ -65,7 +65,8 @@ description: grating・中心波長・ROI・横軸較正をバージョン管理
             "c0": 673.3405851432854,
             "c1": 0.020990883361968825,
             "c2": -2.889725985123467e-07
-        }
+        },
+        "raw_spectrum": [101.2, 98.7, 105.4, "... (detector_widthまたはROI幅と同じ要素数)"]
     }
 }
 ```
@@ -80,6 +81,8 @@ description: grating・中心波長・ROI・横軸較正をバージョン管理
 - `calibration.reference_kind` は較正に使った標準の種類を表し、`"emission_lines"`（輝線標準、Wavelength較正）、`"emission_lines_with_excitation"`（輝線標準の波長を励起波長でRaman shiftへ変換した較正）、`"raman_standard"`（Raman標準物質のシフト値を直接使った較正）のいずれかです。
   `calibration.standards` は実際にピークを割り当てた標準（`calibrationStandards/` のカタログ由来、`standard_id` / `display_name` / `quantity`）の一覧で、手入力した値のみで較正した場合など標準を特定できない場合は空配列になります。
   これらは較正ダイアログの「Save and apply」でのみ設定され、この情報を持たない旧バージョンのレコードを読み込むと`unit`から推定した値が補われます。
+- `calibration.raw_spectrum` は較正ダイアログでピークをフィットした際の生スペクトル(強度値の配列)で、`calibration.coefficients`と同じ生センサーpixel順(Flip Xを元に戻した順序)で並びます。
+  どの実測データからこの較正係数が導かれたかを後から検証・再現できるように記録され、この情報を持たない旧バージョンのレコードを読み込むと`null`になります。
 - `compatibility` の各機器は、シリアル番号が取得できていればその完全一致を、取得できなければモデル名の完全一致を要求します。
 
 ## 保存されないもの
