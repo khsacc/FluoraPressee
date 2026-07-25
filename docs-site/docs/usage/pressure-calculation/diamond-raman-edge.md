@@ -11,7 +11,7 @@ description: ダイヤモンドアンビル自身の1次ラマンエッジ位置
 - ゼロ圧ピーク位置の初期値: 1334.0 cm<sup>-1</sup>
 
 :::caution
-このセンサーを使うには、フィッティング設定の「Fit Function」で **Diamond Raman Edge** を選ぶ必要があります。
+この圧力マーカーを使うには、フィッティング設定の「Fit Function」で **Diamond Raman Edge** を選ぶ必要があります。
 これは通常のピーク関数フィットではなく、`-dI/dν` をPseudo-Voigtでフィットしてエッジ位置を求める専用アルゴリズムで、ピーク数は常に1です。
 逆にFit Functionを Diamond Raman Edge にした場合は、Pressure Scaleも本ページのDiamond Raman Edge系スケールのいずれかを選ぶ必要があります。
 組み合わせが一致しないと圧力欄に "Configuration Error" と表示され、圧力は計算されません。
@@ -65,12 +65,12 @@ description: ダイヤモンドアンビル自身の1次ラマンエッジ位置
 
 ## 温度補正
 
-このセンサーには温度補正の仕組み自体がありません。
+この圧力マーカーには温度補正の仕組み自体がありません。
 スケールを選ぶと「Temperature Correction」欄自体が非表示になります。
 
 ## フィッティングの仕組み
 
-ダイヤモンドのエッジは通常のピークとは異なり、強度が急激に落ち込む「段差（ステップ）」状の形状をしているため、他のセンサーのようにGauss/Lorentz/Pseudo Voigt/Moffatで強度スペクトルそのものをフィットすることはできません。
+ダイヤモンドのエッジは通常のピークとは異なり、強度が急激に落ち込む「段差（ステップ）」状の形状をしているため、他の圧力マーカーのようにGauss/Lorentz/Pseudo Voigt/Moffatで強度スペクトルそのものをフィットすることはできません。
 代わりに `src/core/analysis.py` の `DataAnalyzer.fit_diamond_raman_edge` は、強度の波数微分 $-dI/d\nu$ を計算して段差を微分空間の「ピーク」に変換し、そのピークをPseudo-Voigt関数でフィットすることでエッジ位置を求めます。
 処理は次の順に行われます。
 
@@ -101,7 +101,7 @@ description: ダイヤモンドアンビル自身の1次ラマンエッジ位置
 
 ## 注意点
 
-- ゼロ圧位置(ν0)はスケールごとに固定されており、通常のセンサーとは異なりユーザーが入力・編集する欄（Zero-pressure peak）は無効化され、「Scale reference ν0」として表示のみになります。
+- ゼロ圧位置(ν0)はスケールごとに固定されており、通常の圧力マーカーとは異なりユーザーが入力・編集する欄（Zero-pressure peak）は無効化され、「Scale reference ν0」として表示のみになります。
 - 上記の通り、Fit Function（Diamond Raman Edge）とPressure Scale（Diamond Raman Edge系）は必ずペアで選択してください。
 - **Akahama and Kawamura 2010** はP > 200 GPa（多メガバール領域、〜410 GPaまで）でのみ検証された式です。
   それより低圧側での適用は文献の対象範囲外であり、コード側にもこの圧力範囲を強制するチェックはないため、低圧のデータに使わないよう注意してください。

@@ -12,7 +12,7 @@ class PressureCalculationResult:
 
 
 class PressureCalculator:
-    """高圧下の圧力計算を行うクラス。複数のセンサーと圧力スケールに対応"""
+    """高圧下の圧力計算を行うクラス。複数の圧力マーカーと圧力スケールに対応"""
 
     SENSORS = {
         "ruby": {
@@ -301,12 +301,12 @@ class PressureCalculator:
     @staticmethod
     def is_temp_in_range(*, sensor: str, temp: float, t_scale: Optional[str] = None,
                          p_scale: Optional[str] = None) -> Tuple[bool, Tuple]:
-        """温度がセンサーの有効範囲内にあるか確認
+        """温度が圧力マーカーの有効範囲内にあるか確認
 
         全引数キーワード専用・すべて必須。
 
         Args:
-            sensor: センサー名
+            sensor: 圧力マーカー名
             temp: 温度値
             t_scale: 温度補正スケール
             p_scale: 温度入力が必須の圧力スケール
@@ -758,7 +758,7 @@ class PressureCalculator:
         全引数キーワード専用・すべて必須。
 
         Args:
-            sensor: センサー名
+            sensor: 圧力マーカー名
             t_scale: 温度スケール
             current_t: 現在の温度
             t0: 基準温度

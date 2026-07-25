@@ -42,5 +42,5 @@ Windowsでは`FluoRaPressee_run.bat`を実行します。
 - [露光・保存](acquisition.md)
 - [回折格子制御・横軸較正](grating-calibration.md)
 - [フィッティング](fitting.md)
-- [圧力計算](pressure-calculation/index.md)（使えるセンサー・圧力スケール・温度補正の詳細を含む）
+- [圧力計算](pressure-calculation/index.md)（使える圧力マーカー・圧力スケール・温度補正の詳細を含む）
 - [メニューバー](menu/index.md)（Hardware / API / Toolsメニューの各項目）
