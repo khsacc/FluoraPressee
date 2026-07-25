@@ -6,11 +6,12 @@ description: FluoraPresséeが保存する各種ファイルの形式一覧
 
 # 保存データの形式
 
-FluoRaPressée は、測定・解析の過程でいくつかの種類のファイルをディスクへ保存します。ここでは、それぞれの
-ファイルの拡張子・内部構造・記録される項目についてまとめます。
+FluoRaPressée は、測定・解析の過程でいくつかの種類のファイルをディスクへ保存します。
+ここでは、それぞれのファイルの拡張子・内部構造・記録される項目についてまとめます。
 
 Configurationファイルと`spectrometerConfig.json`を除き、保存場所は基本的にユーザーがファイル保存ダイアログで指定したフォルダです。
-Configurationファイルのみ、OSのユーザー別application data領域に自動保存されます。`spectrometerConfig.json`はリポジトリルート直下に保存されます。
+Configurationファイルのみ、OSのユーザー別application data領域に自動保存されます。
+`spectrometerConfig.json`はリポジトリルート直下に保存されます。
 
 ## ファイル一覧
 

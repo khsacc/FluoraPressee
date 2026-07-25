@@ -8,20 +8,18 @@ description: Zircon B1gモードによる圧力スケールと温度補正
 
 - 種類: Raman
 - 横軸単位: cm<sup>-1</sup>
-- ゼロ圧ピーク位置の初期値: 1008.6 cm<sup>-1</sup>（あくまで初期値です。実際の測定系・試料で測ったゼロ圧位置に
-  置き換えてください）
+- ゼロ圧ピーク位置の初期値: 1008.6 cm<sup>-1</sup>（あくまで初期値です。
+  実際の測定系・試料で測ったゼロ圧位置に置き換えてください）
 
 ## 圧力スケール（2種類、いずれも温度補正は任意）
 
-- **Schmidt et al. 2013** — <i>Am. Min.</i>（線形、5.69 cm<sup>-1</sup>/GPa）
-  [DOI: 10.2138/am.2013.4143](https://doi.org/10.2138/am.2013.4143)
+- **Schmidt et al. 2013** — <i>Am. Min.</i>（線形、5.69 cm<sup>-1</sup>/GPa）[DOI: 10.2138/am.2013.4143](https://doi.org/10.2138/am.2013.4143)
 
   $$
   P = \frac{\nu - \nu_0}{5.69}
   $$
 
-- **Takahashi et al. 2024** — <i>J. Raman Spectrosc.</i>（線形、5.48 cm<sup>-1</sup>/GPa）
-  [DOI: 10.1002/jrs.6663](https://doi.org/10.1002/jrs.6663)
+- **Takahashi et al. 2024** — <i>J. Raman Spectrosc.</i>（線形、5.48 cm<sup>-1</sup>/GPa）[DOI: 10.1002/jrs.6663](https://doi.org/10.1002/jrs.6663)
 
   $$
   P = \frac{\nu - \nu_0}{5.48}
@@ -34,8 +32,7 @@ description: Zircon B1gモードによる圧力スケールと温度補正
 | Schmidt et al. 2013 | 296 – 1223 K |
 | Takahashi et al. 2024 | 294 – 1078 K |
 
-[圧力計算の共通の考え方](index.md#圧力計算の共通の考え方表記)のオフセット補正式
-$\nu_0(T) = \nu_{0,T_0} + [f(T)-f(T_0)]$ における $f(T)$ は次の通りです。
+[圧力計算の共通の考え方](index.md#圧力計算の共通の考え方表記)のオフセット補正式$\nu_0(T) = \nu_{0,T_0} + [f(T)-f(T_0)]$ における $f(T)$ は次の通りです。
 
 - **Schmidt et al. 2013**（$T_c$ = 摂氏温度 = $T - 273.15$）
   $$

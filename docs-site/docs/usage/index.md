@@ -10,12 +10,15 @@ description: 測定、較正、解析の基本的な流れ
 
 Windowsでは`FluoRaPressee_run.bat`を実行します。
 
-保存済みスペクトルの解析だけを行うAnalysis Modeは、装置を接続せずに単独で
-起動できます。
+保存済みスペクトルの解析だけを行うAnalysis Modeは、装置を接続せずに単独で起動できます。
 
 ```powershell
 .venv\Scripts\python.exe analysis_main.py
 ```
+## Main GUI
+
+![](../../static/img/main_gui_combined.jpg)
+
 
 ## 基本的な測定の流れ
 
