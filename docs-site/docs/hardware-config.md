@@ -13,8 +13,7 @@ FluoRaPressée は、装置との堅牢な通信を実現するため、接続�
 
 ## 初回起動時の自動生成
 
-`main.py` を実行した際（`--debug` モードでも同様です）、`spectrometerConfig.json` が存在しなければセットアップウィザードが自動的に開きます。
-ウィザードは3ステップです。
+アプリケーションを起動した際、装置に関する情報ファイル（`spectrometerConfig.json`）が存在しなければ、初回接続とみなしセットアップウィザードが自動的に開きます。ウィザードは3ステップです。
 
 1. **メーカー選択**: Andor / Princeton Instruments / Ocean Optics
 2. **接続設定**: メーカーごとに異なる項目を入力します（[メーカー別の接続設定項目](data-formats/spectrometer-config.md#メーカー別の接続設定項目)を参照）。

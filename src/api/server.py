@@ -42,7 +42,7 @@ def _jsonify(obj):
     DataAnalyzer.fit_spectrum() and PressureCalculator.calculate() return
     numpy.float64 scalars (from curve_fit/formulas) and, for double-peak fits,
     numpy.ndarray curves (y_fit1/y_fit2) - none of which Pydantic/FastAPI's
-    JSON encoder can serialize directly.
+    JSON encoder can serialise directly.
     """
     if isinstance(obj, np.ndarray):
         return obj.tolist()

@@ -21,7 +21,7 @@ def captured_at_now():
 
 
 def normalize_camera_metadata(state):
-    """Normalize the measurement-metadata camera shape for the public API."""
+    """Normalise the measurement-metadata camera shape for the public API."""
     metadata = deepcopy(state or {})
     if "exposure_s" in metadata:
         metadata["exposure_time_s"] = metadata.pop("exposure_s")
@@ -29,7 +29,7 @@ def normalize_camera_metadata(state):
 
 
 def normalize_spectrometer_metadata(state, configured_identity=None):
-    """Normalize both spectrometer backends to one public identity shape."""
+    """Normalise both spectrometer backends to one public identity shape."""
     metadata = deepcopy(state or {})
     configured_identity = configured_identity or {}
     serial_number = metadata.pop("serial_number", None)
