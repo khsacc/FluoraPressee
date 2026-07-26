@@ -8,6 +8,22 @@ description: 圧力計算ウィンドウで使える圧力マーカー・圧力�
 
 <img src={require('@site/static/img/usage_pressure_calculator.jpg').default} style={{maxWidth: '480px'}} />
 
+## 実装されている圧力マーカー
+
+| 圧力マーカー | 種類 | 単位 | 圧力スケール数 | 温度補正 |
+|---|---|---|---|---|
+| [Ruby](ruby.md) | 蛍光 | nm | 8 | 任意（6スケールから選択） |
+| [Sm<sup>2+</sup>:SrB<sub>4</sub>O<sub>7</sub>](sm-srb4o7.md) | 蛍光 | nm | 4 | 任意（2スケールから選択） |
+| [Sm<sup>2+</sup>:SrFCl](sm-srfcl.md) | 蛍光 | nm | 3 | 任意（1スケール） |
+| [Sm<sup>3+</sup>:YAG](sm-yag.md) | 蛍光 | nm | 1 | 任意（1スケール） |
+| [<sup>13</sup>C diamond 1st order](diamond-13c.md) | Raman | cm<sup>-1</sup> | 2 | スケールにより異なる（必須・埋め込み／補正手段なし） |
+| [Diamond Raman Edge](diamond-raman-edge.md) | Raman（専用フィット） | cm<sup>-1</sup> | 4 | 補正手段なし |
+| [Cubic BN TO](cubic-bn.md) | Raman | cm<sup>-1</sup> | 2 | スケールにより異なる（必須／任意） |
+| [Zircon B1g](zircon.md) | Raman | cm<sup>-1</sup> | 2 | 任意（2スケール、それぞれ対応する論文とペア） |
+| [Quartz 464 cm<sup>-1</sup>](quartz-464.md) | Raman | cm<sup>-1</sup> | 2 | 任意（1スケール） |
+| [Quartz 128 cm<sup>-1</sup>](quartz-128.md) | Raman | cm<sup>-1</sup> | 1 | 必須（埋め込み、T0固定） |
+
+
 ## 圧力マーカーの種類と対応する横軸
 
 圧力計算ウィンドウで選べる圧力マーカーは、横軸のモード（波長 nm / Raman shift cm<sup>-1</sup>）によって以下のように分かれます。
@@ -40,16 +56,6 @@ $f(T)$ の絶対値そのものが正確でなくても、$T_0$ での実測値 
 
 温度補正が**必須**なスケールではこのオフセット補正は行われず、圧力の式 $P$ 自体が $T$ を直接の変数として含みます（式は各圧力マーカーのページを参照してください）。
 
-## 共通の操作
-
-1. **Sensor** と **Pressure Scale** を選びます。
-2. **Zero-pressure peak position（ゼロ圧ピーク位置）** を入力します。
-   圧力マーカーごとに文献の代表値が初期値として自動入力されますが、これはあくまで目安です。
-   実際の測定系・試料で測ったゼロ圧位置（大気圧・室温での位置）を必ず自分で測定し、入力し直してください。
-3. 現在のピーク位置はフィッティング結果から自動的に読み込まれます。
-   複数ピークをフィットした場合は「Calculate pressure by」でどのピークを圧力計算に使うか選択します。
-4. 必要に応じて温度補正を設定します（詳細は下記）。
-
 ## 温度補正の3パターン
 
 圧力マーカー・圧力スケールの組み合わせによって、温度補正の扱いは次の3パターンのいずれかになります。
@@ -67,17 +73,3 @@ $f(T)$ の絶対値そのものが正確でなくても、$T_0$ での実測値 
 ただし計算そのものは止まらず、範囲外でも外挿してそのまま圧力が計算されるため、警告が出た場合は文献の適用範囲を確認したうえで結果を解釈してください。
 :::
 
-## 圧力マーカー一覧
-
-| 圧力マーカー | 種類 | 単位 | 圧力スケール数 | 温度補正 |
-|---|---|---|---|---|
-| [Ruby](ruby.md) | 蛍光 | nm | 8 | 任意（6スケールから選択） |
-| [Sm<sup>2+</sup>:SrB<sub>4</sub>O<sub>7</sub>](sm-srb4o7.md) | 蛍光 | nm | 4 | 任意（2スケールから選択） |
-| [Sm<sup>2+</sup>:SrFCl](sm-srfcl.md) | 蛍光 | nm | 3 | 任意（1スケール） |
-| [Sm<sup>3+</sup>:YAG](sm-yag.md) | 蛍光 | nm | 1 | 任意（1スケール） |
-| [<sup>13</sup>C diamond 1st order](diamond-13c.md) | Raman | cm<sup>-1</sup> | 2 | スケールにより異なる（必須・埋め込み／補正手段なし） |
-| [Diamond Raman Edge](diamond-raman-edge.md) | Raman（専用フィット） | cm<sup>-1</sup> | 4 | 補正手段なし |
-| [Cubic BN TO](cubic-bn.md) | Raman | cm<sup>-1</sup> | 2 | スケールにより異なる（必須／任意） |
-| [Zircon B1g](zircon.md) | Raman | cm<sup>-1</sup> | 2 | 任意（2スケール、それぞれ対応する論文とペア） |
-| [Quartz 464 cm<sup>-1</sup>](quartz-464.md) | Raman | cm<sup>-1</sup> | 2 | 任意（1スケール） |
-| [Quartz 128 cm<sup>-1</sup>](quartz-128.md) | Raman | cm<sup>-1</sup> | 1 | 必須（埋め込み、T0固定） |
