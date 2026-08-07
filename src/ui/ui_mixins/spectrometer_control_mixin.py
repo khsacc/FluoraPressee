@@ -3,17 +3,23 @@ from PyQt6.QtCore import Qt
 
 from src.hardware.spectrometer import SpectrometerMoveThread
 from src.ui.calibration_ui import CalibrationWindow
+from src.core.configuration_catalog import excitation_wavelength_key
 from src.core.measurement_metadata import public_axis_kind
 
 
 class SpectrometerControlMixin:
-    def on_spec_mode_changed(self):
-        # The centralWidget is fully disabled while the spectrometer moves
-        # (_show_spectrometer_moving_dialog calls centralWidget().setEnabled(False)),
-        # so this handler should not fire during movement. Return as a safety guard.
-        if hasattr(self, 'spec_move_thread') and self.spec_move_thread.isRunning():
-            return
-
+    def _sync_controls_to_display_mode(self):
+        """Every side effect of the Wavelength/Raman display toggle besides the
+        toggle itself and calibration invalidation (each caller decides that on
+        its own terms): spin_exc_wl's enabled state, the displayed centre value
+        (recomputed from physical_center_wl, since spin_centre_wl's own nm<->cm-1
+        meaning flips with the toggle), the Apply button's state, the plot's
+        axis label, fit-range-dependent UI, and the Pressure Window's sensor
+        list. Shared by on_spec_mode_changed() (a user-driven toggle) and
+        apply_calibration()'s _sync_display_mode_to_unit() (a programmatic
+        toggle to match a calibration being applied) so neither can drift from
+        what the other keeps in sync.
+        """
         is_raman = self.radio_spec_mode_raman.isChecked()
         self.spin_exc_wl.setEnabled(is_raman)
 
@@ -35,8 +41,32 @@ class SpectrometerControlMixin:
         self.check_spectrometer_changes()
         self.update_plot_labels()
         self.on_fit_settings_changed()
+        self.sync_pressure_calculator_mode()
+
+    def on_spec_mode_changed(self):
+        # The centralWidget is fully disabled while the spectrometer moves
+        # (_show_spectrometer_moving_dialog calls centralWidget().setEnabled(False)),
+        # so this handler should not fire during movement. Return as a safety guard.
+        if hasattr(self, 'spec_move_thread') and self.spec_move_thread.isRunning():
+            return
+
+        is_raman = self.radio_spec_mode_raman.isChecked()
+        if self.calib_coeffs is not None:
+            new_unit = "Raman shift" if is_raman else "Wavelength"
+            if new_unit != self.calib_unit:
+                self.deactivate_axis_calibration("display mode changed")
+
+        self._sync_controls_to_display_mode()
 
     def on_exc_wl_changed(self):
+        if self.calib_coeffs is not None and self.calib_unit == "Raman shift":
+            if (
+                self.calib_laser_wl is None
+                or excitation_wavelength_key(self.spin_exc_wl.value())
+                != excitation_wavelength_key(self.calib_laser_wl)
+            ):
+                self.deactivate_axis_calibration("excitation wavelength changed")
+
         if self.radio_spec_mode_raman.isChecked():
             ex_wl = self.spin_exc_wl.value()
             if ex_wl > 0 and self.physical_center_wl > 0:
@@ -272,6 +302,15 @@ class SpectrometerControlMixin:
                 "error_message",
                 "The spectrometer setting change failed."
             )
+            # The move may have partially completed (e.g. Princeton moves grating
+            # then wavelength in sequence), and _prepare_configuration_for_loading()
+            # already switched the ROI/display-mode/excitation widgets to the
+            # rejected configuration's values before this move was attempted -- so
+            # the previous calibration can no longer be trusted to match either the
+            # physical position or what is now on screen. Fall back to pixel rather
+            # than silently leaving it active, mirroring the cancelled-move branch
+            # above and the plain successful-Apply path below.
+            self.clear_active_configuration()
             handled_by_api = self._fail_pending_configuration(message)
             self._close_spectrometer_moving_dialog()
             self._set_spectrometer_controls_enabled(True)

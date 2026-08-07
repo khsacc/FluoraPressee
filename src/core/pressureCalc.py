@@ -12,7 +12,7 @@ class PressureCalculationResult:
 
 
 class PressureCalculator:
-    """高圧下の圧力計算を行うクラス。複数のセンサーと圧力スケールに対応"""
+    """高圧下の圧力計算を行うクラス。複数の圧力マーカーと圧力スケールに対応"""
 
     SENSORS = {
         "ruby": {
@@ -32,6 +32,12 @@ class PressureCalculator:
             "kind": "fluorescence",
             "unit": "nm",
             "initial_value": 690.300,
+        },
+        "sm_yag_y1": {
+            "label": "Sm3+:YAG (Y1)",
+            "kind": "fluorescence",
+            "unit": "nm",
+            "initial_value": 617.800,
         },
         "diamond_13c_1st_order": {
             "label": "13C diamond 1st order",
@@ -89,11 +95,15 @@ class PressureCalculator:
             # "sm_srb4o7_rashchenko_2015_lam12": {"label": "0-1 line (lam2): Rashchenko et al. 2015", "temperature_mode": "none"},
             # "sm_srb4o7_rashchenko_2015_lam13": {"label": "0-1 line (lam3): Rashchenko et al. 2015", "temperature_mode": "none"},
             # "sm_srb4o7_rashchenko_2015_lam14": {"label": "0-1 line (lam4): Rashchenko et al. 2015", "temperature_mode": "none"},
+            "sm_srb4o7_wei_2024": {"label": "0-0 line: Wei et al. 2024 (Ar PTM)", "temperature_mode": "none"},
         },
         "sm_srfcl": {
             "sm_srfcl_lorenz_1994": {"label": "Lorenz et al. 1994", "temperature_mode": "none"},
             "sm_srfcl_shen_2021": {"label": "Shen et al. 2021", "temperature_mode": "none"},
             "sm_srfcl_shen_1991": {"label": "Shen et al. 1991", "temperature_mode": "none"},
+        },
+        "sm_yag_y1": {
+            "sm_yag_y1_wei_2024": {"label": "Y1 line: Wei et al. 2024 (Ar PTM)", "temperature_mode": "none"},
         },
         "diamond_13c_1st_order": {
             "diamond_13c_schiferl_1997": {
@@ -194,12 +204,17 @@ class PressureCalculator:
             "ruby_ragan_1992": {"label": "Ragan et al. 1992", "valid_range": (0.0, 600.0)},
             "ruby_datchi_2007_ht": {"label": "Datchi et al. 2007 HT", "valid_range": (296, 900)},
             "ruby_datchi_2007_lt": {"label": "Datchi et al. 2007 LT", "valid_range": (0, 296)},
+            "ruby_wei_2024": {"label": "Wei et al. 2024 (R1)", "valid_range": (296, 773)},
         },
         "sm_srb4o7": {
             "sm_srb4o7_datchi_2007": {"label": "Datchi et al. 2007", "valid_range": (296, 900.0)},
+            "sm_srb4o7_wei_2024": {"label": "Wei et al. 2024 (0-0 line)", "valid_range": (296, 923)},
         },
         "sm_srfcl": {
             "sm_srfcl_lorenz_1994": {"label": "Lorenz et al. 1994", "valid_range": (20, 650)},
+        },
+        "sm_yag_y1": {
+            "sm_yag_y1_wei_2024": {"label": "Wei et al. 2024 (Y1)", "valid_range": (296, 873)},
         },
         "cubic_bn_to": {
             "cubic_bn_kawamoto_2004": {"label": "Kawamoto et al. 2004", "valid_range": (300, 1000)},
@@ -286,12 +301,12 @@ class PressureCalculator:
     @staticmethod
     def is_temp_in_range(*, sensor: str, temp: float, t_scale: Optional[str] = None,
                          p_scale: Optional[str] = None) -> Tuple[bool, Tuple]:
-        """温度がセンサーの有効範囲内にあるか確認
+        """温度が圧力マーカーの有効範囲内にあるか確認
 
         全引数キーワード専用・すべて必須。
 
         Args:
-            sensor: センサー名
+            sensor: 圧力マーカー名
             temp: 温度値
             t_scale: 温度補正スケール
             p_scale: 温度入力が必須の圧力スケール
@@ -568,6 +583,18 @@ class PressureCalculator:
             if p_scale == "sm_srb4o7_rashchenko_2015_lam14":
                 p, dp = PressureCalculator._calc_mao_type(wavelength, wavelength0, wavelength_err, 2988, 35.7, 36, 1.5)
                 return p, dp, None
+            if p_scale == "sm_srb4o7_wei_2024":
+                p, dp = PressureCalculator._calc_mao_type(
+                    wavelength, wavelength0, wavelength_err, 2761.0, -9.88, 20.02, 0.82
+                )
+                return p, dp, None
+
+        if sensor == "sm_yag_y1":
+            if p_scale == "sm_yag_y1_wei_2024":
+                p, dp = PressureCalculator._calc_mao_type(
+                    wavelength, wavelength0, wavelength_err, 2019.2, -1.33, 22.56, 0.97
+                )
+                return p, dp, None
 
         if sensor == "sm_srfcl":
             if p_scale == "sm_srfcl_lorenz_1994":
@@ -731,7 +758,7 @@ class PressureCalculator:
         全引数キーワード専用・すべて必須。
 
         Args:
-            sensor: センサー名
+            sensor: 圧力マーカー名
             t_scale: 温度スケール
             current_t: 現在の温度
             t0: 基準温度
@@ -781,7 +808,17 @@ class PressureCalculator:
                 theta = 760
                 wn_at_current_t = wn_at_t0 + PressureCalculator._calc_debye_shift(alpha, theta, current_t) - PressureCalculator._calc_debye_shift(alpha, theta, t0)
                 return 10 ** 7 / wn_at_current_t
-            
+
+            elif t_scale == "ruby_wei_2024":
+                # Cubic fit to R1 wavelength shift at ambient pressure, Table I of
+                # Wei et al. 2024, valid 296-773 K. Delta-lambda in nm, deltaT = T - 296 K.
+                def wei_ruby_temp(temp):
+                    deltat = temp - 296
+                    b1, b2, b3 = 7.29e-3, -3.47e-6, 1.09e-8
+                    return b1 * deltat + b2 * deltat**2 + b3 * deltat**3
+                offset = wei_ruby_temp(t0) - zero_peak_at_t0
+                return wei_ruby_temp(current_t) - offset
+
 
         if sensor == "sm_srb4o7":
             if t_scale == "sm_srb4o7_datchi_2007":
@@ -790,6 +827,27 @@ class PressureCalculator:
                     return -8.7 * 10**-5 * deltat + 4.62 * 10**-6 * deltat**2 -2.38 * 10**-9 * deltat**3
                 offset = datchi_borate_temp(t0) - zero_peak_at_t0
                 return datchi_borate_temp(current_t) - offset
+
+            if t_scale == "sm_srb4o7_wei_2024":
+                # Linear fit to the lambda1 (0-0 line) wavelength shift at ambient
+                # pressure, Table II of Wei et al. 2024, valid 296-923 K.
+                def wei_borate_temp(temp):
+                    deltat = temp - 296
+                    a1 = -0.70e-4
+                    return a1 * deltat
+                offset = wei_borate_temp(t0) - zero_peak_at_t0
+                return wei_borate_temp(current_t) - offset
+
+        if sensor == "sm_yag_y1":
+            if t_scale == "sm_yag_y1_wei_2024":
+                # Linear fit to the Y1 wavelength shift at ambient pressure, Table III
+                # of Wei et al. 2024, valid 296-873 K.
+                def wei_yag_y1_temp(temp):
+                    deltat = temp - 296
+                    c1 = -2.12e-4
+                    return c1 * deltat
+                offset = wei_yag_y1_temp(t0) - zero_peak_at_t0
+                return wei_yag_y1_temp(current_t) - offset
 
         if sensor == "sm_srfcl":
             if t_scale == "sm_srfcl_lorenz_1994":

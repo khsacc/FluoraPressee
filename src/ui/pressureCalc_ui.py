@@ -342,6 +342,8 @@ class PressureCalculatorWindow(QDialog):
             recommended = 2
         elif sensor == "sm_srb4o7":
             recommended = 1
+        elif sensor == "sm_yag_y1":
+            recommended = 1
         elif sensor == "diamond_raman_edge":
             recommended = 1
         elif sensor == "quartz_464":

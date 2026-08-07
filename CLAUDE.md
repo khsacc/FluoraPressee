@@ -122,7 +122,8 @@ dependency, so they're usable standalone or from scripts:
   and are no longer part of the active calibration UI.
 - `configuration_catalog.py` (`ConfigurationCatalog`): Qt-independent, versioned configuration
   storage. Immutable JSON records contain hardware compatibility, grating, centre position, ROI,
-  display state, and calibration; a SQLite catalog indexes active/history versions without scanning
+  display state, and calibration (including the raw spectrum the operator fit peaks against, in
+  `calibration.raw_spectrum`); a SQLite catalog indexes active/history versions without scanning
   every JSON file. A slot is identified by hardware namespace + grating + target centre + ROI, and
   saving another calibration for the same slot atomically makes the new record active. Both the GUI
   and future API discovery endpoints must call this class rather than duplicating selection rules.
@@ -197,3 +198,4 @@ full local control.
 - User-facing manual content (installation, usage, API reference) lives in `docs-site/` (a Docusaurus
   site published to GitHub Pages; manual screenshots live under `docs-site/static/img/manual/`), not
   internal developer docs (those live in `work/`).
+  - In the markdown files in `docs-site/`, LaTeX notation ($...$, $$...$$) can be used.

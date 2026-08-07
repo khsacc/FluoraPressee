@@ -53,6 +53,119 @@ class CalibrationUiAssignmentTests(unittest.TestCase):
         ]
         self.assertEqual(standard_ids, ["Ne-I", "Ar-I", "Hg-I"])
 
+    def _standard_ids(self):
+        return {
+            self.window.list_standards.item(index).data(Qt.ItemDataRole.UserRole)
+            for index in range(self.window.list_standards.count())
+        }
+
+    def test_raman_shift_standards_hidden_until_raman_shift_unit_selected(self):
+        self.assertTrue(self.window.radio_unit_wl.isChecked())
+        self.assertNotIn("ASTM-Cyclohexane", self._standard_ids())
+        self.assertNotIn("Polystyrene-NMIJ", self._standard_ids())
+
+        self.window.radio_unit_raman.setChecked(True)
+
+        self.assertIn("ASTM-Cyclohexane", self._standard_ids())
+        self.assertIn("Polystyrene-NMIJ", self._standard_ids())
+        # Ne/Ar/Hg remain selectable in both units.
+        self.assertIn("Ne-I", self._standard_ids())
+
+        self.window.radio_unit_wl.setChecked(True)
+
+        self.assertNotIn("ASTM-Cyclohexane", self._standard_ids())
+        self.assertNotIn("Polystyrene-NMIJ", self._standard_ids())
+
+    def test_raman_shift_standard_selection_survives_a_unit_round_trip(self):
+        self.window.radio_unit_raman.setChecked(True)
+        self._set_standard("Polystyrene-NMIJ", True)
+
+        self.window.radio_unit_wl.setChecked(True)
+        self.window.radio_unit_raman.setChecked(True)
+
+        item = next(
+            self.window.list_standards.item(index)
+            for index in range(self.window.list_standards.count())
+            if self.window.list_standards.item(index).data(
+                Qt.ItemDataRole.UserRole
+            ) == "Polystyrene-NMIJ"
+        )
+        self.assertEqual(item.checkState(), Qt.CheckState.Checked)
+
+    def test_raman_shift_line_assignment_survives_switch_back_to_wavelength_unit(self):
+        self.window.radio_unit_raman.setChecked(True)
+        polystyrene = self.window.reference_standards["Polystyrene-NMIJ"].lines[0]
+        self.window.assign_reference_line(0, polystyrene)
+
+        self.window.radio_unit_wl.setChecked(True)
+
+        self.assertEqual(
+            self.window.assignments[0]["line_id"], polystyrene.line_id
+        )
+
+    def test_used_reference_standards_reports_emission_lines_for_wavelength_unit(self):
+        neon = self.window.reference_standards["Ne-I"].lines[17]
+        argon = self.window.reference_standards["Ar-I"].lines[8]
+        self.window.assign_reference_line(0, neon)
+        self.window.assign_reference_line(1, argon)
+
+        used = {s["standard_id"]: s for s in self.window._used_reference_standards()}
+
+        self.assertEqual(set(used), {"Ne-I", "Ar-I"})
+        self.assertEqual(used["Ne-I"]["quantity"], "wavelength_nm")
+        self.assertEqual(
+            self.window._reference_kind_for("Wavelength", list(used.values())),
+            "emission_lines",
+        )
+
+    def test_used_reference_standards_reports_emission_lines_with_excitation_for_raman_unit(self):
+        self.window.radio_unit_raman.setChecked(True)
+        neon = self.window.reference_standards["Ne-I"].lines[17]
+        argon = self.window.reference_standards["Ar-I"].lines[8]
+        self.window.assign_reference_line(0, neon)
+        self.window.assign_reference_line(1, argon)
+
+        used = self.window._used_reference_standards()
+
+        self.assertEqual(
+            self.window._reference_kind_for("Raman shift", used),
+            "emission_lines_with_excitation",
+        )
+
+    def test_used_reference_standards_reports_raman_standard_when_a_raman_native_line_is_used(self):
+        self.window.radio_unit_raman.setChecked(True)
+        polystyrene = self.window.reference_standards["Polystyrene-NMIJ"].lines[0]
+        neon = self.window.reference_standards["Ne-I"].lines[17]
+        self.window.assign_reference_line(0, polystyrene)
+        self.window.assign_reference_line(1, neon)
+
+        used = {s["standard_id"]: s for s in self.window._used_reference_standards()}
+
+        self.assertEqual(set(used), {"Polystyrene-NMIJ", "Ne-I"})
+        self.assertEqual(used["Polystyrene-NMIJ"]["quantity"], "raman_shift_cm1")
+        self.assertEqual(
+            self.window._reference_kind_for("Raman shift", list(used.values())),
+            "raman_standard",
+        )
+
+    def test_used_reference_standards_excludes_unchecked_and_manual_rows(self):
+        neon = self.window.reference_standards["Ne-I"].lines[17]
+        argon = self.window.reference_standards["Ar-I"].lines[8]
+        self.window.assign_reference_line(0, neon)
+        self.window.assign_reference_line(1, argon)
+        # An unchecked row must not count even though it still has an assignment.
+        self.window.row_widgets[1]["check"].setChecked(False)
+        # A manually-typed value (no catalogue line_id) contributes no standard.
+        self.window.assignments[2] = {
+            "line_id": None, "wavelength_nm": 650.0, "value": 650.0,
+            "species": "Custom", "locked": True,
+        }
+        self.window.row_widgets[2]["check"].setChecked(True)
+
+        used = self.window._used_reference_standards()
+
+        self.assertEqual([s["standard_id"] for s in used], ["Ne-I"])
+
     def test_automatic_matching_always_expects_increasing_wavelength(self):
         # self.current_spectrum's pixel index already has Flip X applied (see
         # on_data_ready/use_displayed_data), so increasing-pixel-index ->
@@ -101,6 +214,25 @@ class CalibrationUiAssignmentTests(unittest.TestCase):
         roundtripped = self.window._to_raw_pixel_domain(raw_domain_coeffs)
         for actual, expected in zip(roundtripped, flipped_domain_coeffs):
             self.assertAlmostEqual(actual, expected, places=6)
+
+    def test_raw_domain_spectrum_unchanged_when_not_flipped(self):
+        self.window._spectrum_is_flipped = False
+
+        result = self.window._raw_domain_spectrum()
+
+        np.testing.assert_array_equal(result, self.window.current_spectrum)
+
+    def test_raw_domain_spectrum_undoes_flip(self):
+        self.window._spectrum_is_flipped = True
+
+        result = self.window._raw_domain_spectrum()
+
+        np.testing.assert_array_equal(result, self.window.current_spectrum[::-1])
+
+    def test_raw_domain_spectrum_none_when_no_spectrum_acquired(self):
+        self.window.current_spectrum = None
+
+        self.assertIsNone(self.window._raw_domain_spectrum())
 
     def test_selected_candidate_preview_takes_priority_over_seed_axis(self):
         self.window.initial_wavelength_axis = np.linspace(600.0, 800.0, 1024)

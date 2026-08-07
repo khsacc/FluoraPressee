@@ -7,7 +7,7 @@ matcher works on the union of all currently active catalogues.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 import math
 from pathlib import Path
@@ -15,16 +15,24 @@ from typing import Iterable, Mapping, Sequence
 
 import numpy as np
 
+from src.core.calibration import CalibrationCore
+
 
 @dataclass(frozen=True)
 class ReferenceLine:
     line_id: str
     standard_id: str
     species: str
-    wavelength_nm: float
+    # Populated for "wavelength_nm"-quantity standards at load time. For
+    # "raman_shift_cm1"-quantity standards it starts out None and is only
+    # filled in by resolve_standard_for_laser(), since the equivalent
+    # wavelength depends on the excitation line in use.
+    wavelength_nm: float | None = None
     enabled_for_calibration: bool = True
     relative_intensity: float | None = None
     uncertainty_nm: float | None = None
+    raman_shift_cm1: float | None = None
+    uncertainty_cm1: float | None = None
     source_url: str | None = None
 
 
@@ -34,6 +42,10 @@ class ReferenceStandard:
     display_name: str
     lines: tuple[ReferenceLine, ...]
     source_url: str | None = None
+    # "wavelength_nm" (atomic emission lamp lines, laser-independent) or
+    # "raman_shift_cm1" (a Raman-active material measured against whichever
+    # excitation line the instrument uses).
+    quantity: str = "wavelength_nm"
 
 
 @dataclass(frozen=True)
@@ -73,40 +85,89 @@ def load_reference_standards(directory: str | Path) -> dict[str, ReferenceStanda
             standard_id = str(data["standard_id"]).strip()
             display_name = str(data.get("display_name") or standard_id).strip()
             source_url = data.get("source_url") or None
+            quantity = str(data.get("quantity") or "wavelength_nm").strip()
+            if quantity not in ("wavelength_nm", "raman_shift_cm1"):
+                raise ValueError(f"Unknown quantity {quantity!r}")
             lines = []
             for index, item in enumerate(data.get("lines", [])):
-                wavelength = float(item["wavelength_nm"])
-                if not math.isfinite(wavelength) or wavelength <= 0:
-                    continue
-                line_id = str(
-                    item.get("line_id")
-                    or f"{standard_id}:{wavelength:.8f}:{index}"
-                )
-                lines.append(
-                    ReferenceLine(
-                        line_id=line_id,
-                        standard_id=standard_id,
-                        species=str(item.get("species") or display_name),
-                        wavelength_nm=wavelength,
-                        enabled_for_calibration=(
-                            item.get("enabled_for_calibration", True) is not False
-                        ),
-                        relative_intensity=_optional_float(item.get("relative_intensity")),
-                        uncertainty_nm=_optional_float(item.get("uncertainty_nm")),
-                        source_url=item.get("source_url") or source_url,
+                common = {
+                    "standard_id": standard_id,
+                    "species": str(item.get("species") or display_name),
+                    "enabled_for_calibration": (
+                        item.get("enabled_for_calibration", True) is not False
+                    ),
+                    "relative_intensity": _optional_float(item.get("relative_intensity")),
+                    "source_url": item.get("source_url") or source_url,
+                }
+                if quantity == "raman_shift_cm1":
+                    shift = float(item["raman_shift_cm1"])
+                    if not math.isfinite(shift):
+                        continue
+                    line_id = str(
+                        item.get("line_id") or f"{standard_id}:{shift:.4f}:{index}"
                     )
-                )
-            lines.sort(key=lambda line: line.wavelength_nm)
+                    lines.append(ReferenceLine(
+                        line_id=line_id,
+                        wavelength_nm=None,
+                        raman_shift_cm1=shift,
+                        uncertainty_cm1=_optional_float(item.get("uncertainty_cm1")),
+                        **common,
+                    ))
+                else:
+                    wavelength = float(item["wavelength_nm"])
+                    if not math.isfinite(wavelength) or wavelength <= 0:
+                        continue
+                    line_id = str(
+                        item.get("line_id")
+                        or f"{standard_id}:{wavelength:.8f}:{index}"
+                    )
+                    lines.append(ReferenceLine(
+                        line_id=line_id,
+                        wavelength_nm=wavelength,
+                        uncertainty_nm=_optional_float(item.get("uncertainty_nm")),
+                        **common,
+                    ))
+            sort_key = (
+                (lambda line: line.raman_shift_cm1)
+                if quantity == "raman_shift_cm1"
+                else (lambda line: line.wavelength_nm)
+            )
+            lines.sort(key=sort_key)
             if standard_id and lines:
                 standards[standard_id] = ReferenceStandard(
                     standard_id=standard_id,
                     display_name=display_name,
                     lines=tuple(lines),
                     source_url=source_url,
+                    quantity=quantity,
                 )
         except Exception as exc:
             print(f"Error loading reference-line catalogue {filename}: {exc}")
     return standards
+
+
+def resolve_standard_for_laser(
+    standard: ReferenceStandard, laser_wavelength_nm: float
+) -> ReferenceStandard:
+    """Fill in wavelength_nm for a raman_shift_cm1-quantity standard.
+
+    A Raman-shift-native standard's peaks are laser-independent in cm^-1, but
+    everything downstream (matching, overlay, sorting) works in wavelength_nm,
+    so the equivalent wavelength for the currently selected excitation line is
+    computed here. wavelength_nm-quantity standards are returned unchanged.
+    """
+    if standard.quantity != "raman_shift_cm1":
+        return standard
+    resolved_lines = tuple(
+        replace(
+            line,
+            wavelength_nm=CalibrationCore.raman_to_nm(
+                line.raman_shift_cm1, laser_wavelength_nm
+            ),
+        )
+        for line in standard.lines
+    )
+    return replace(standard, lines=resolved_lines)
 
 
 def _poly_values(coefficients: Sequence[float], pixels: np.ndarray) -> np.ndarray:

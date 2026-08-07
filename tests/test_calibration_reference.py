@@ -5,11 +5,13 @@ from pathlib import Path
 
 import numpy as np
 
+from src.core.calibration import CalibrationCore
 from src.core.calibration_reference import (
     ReferenceLine,
     find_match_candidates,
     load_reference_standards,
     match_from_seed_axis,
+    resolve_standard_for_laser,
 )
 
 
@@ -85,6 +87,94 @@ class ReferenceCatalogueTests(unittest.TestCase):
                 if not line.enabled_for_calibration
             },
             {673.80320, 675.95821, 705.12922, 706.4762},
+        )
+
+
+class RamanShiftStandardTests(unittest.TestCase):
+    """Raman-shift-native standards (e.g. ASTM materials, polystyrene RMs)."""
+
+    def test_loads_raman_shift_quantity_catalogue_with_wavelength_unresolved(self):
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, "Cyclohexane.json").write_text(
+                json.dumps({
+                    "standard_id": "ASTM-Cyclohexane",
+                    "quantity": "raman_shift_cm1",
+                    "lines": [
+                        {"raman_shift_cm1": 801.3, "uncertainty_cm1": 0.96},
+                        {"raman_shift_cm1": 384.1},
+                    ],
+                }),
+                encoding="utf-8",
+            )
+
+            standard = load_reference_standards(directory)["ASTM-Cyclohexane"]
+
+        self.assertEqual(standard.quantity, "raman_shift_cm1")
+        # Sorted by raman_shift_cm1 even though wavelength_nm isn't known yet.
+        self.assertEqual(
+            [line.raman_shift_cm1 for line in standard.lines], [384.1, 801.3]
+        )
+        self.assertTrue(all(line.wavelength_nm is None for line in standard.lines))
+        self.assertEqual(standard.lines[1].uncertainty_cm1, 0.96)
+
+    def test_resolve_standard_for_laser_computes_matching_wavelength(self):
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, "Cyclohexane.json").write_text(
+                json.dumps({
+                    "standard_id": "ASTM-Cyclohexane",
+                    "quantity": "raman_shift_cm1",
+                    "lines": [{"raman_shift_cm1": 801.3}],
+                }),
+                encoding="utf-8",
+            )
+            standard = load_reference_standards(directory)["ASTM-Cyclohexane"]
+
+        resolved = resolve_standard_for_laser(standard, 532.0)
+
+        line = resolved.lines[0]
+        self.assertIsNotNone(line.wavelength_nm)
+        self.assertAlmostEqual(
+            CalibrationCore.nm_to_raman(line.wavelength_nm, 532.0),
+            801.3,
+            places=6,
+        )
+
+    def test_resolve_standard_for_laser_is_a_no_op_for_wavelength_standards(self):
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, "Ne-I.json").write_text(
+                json.dumps({
+                    "standard_id": "Ne-I",
+                    "lines": [{"wavelength_nm": 700.0}],
+                }),
+                encoding="utf-8",
+            )
+            standard = load_reference_standards(directory)["Ne-I"]
+
+        self.assertIs(resolve_standard_for_laser(standard, 532.0), standard)
+
+    def test_bundled_astm_and_polystyrene_catalogues_load(self):
+        catalogue_directory = Path(__file__).parents[1] / "calibrationStandards"
+        standards = load_reference_standards(catalogue_directory)
+
+        expected_counts = {
+            "ASTM-Cyclohexane": 11,
+            "ASTM-Naphthalene": 8,
+            "ASTM-4-Acetamidophenol": 24,
+            "ASTM-Toluene-Acetonitrile": 12,
+            "Polystyrene-NMIJ": 11,
+        }
+        for standard_id, expected_count in expected_counts.items():
+            standard = standards[standard_id]
+            self.assertEqual(standard.quantity, "raman_shift_cm1")
+            self.assertEqual(len(standard.lines), expected_count)
+            self.assertEqual(
+                [line.raman_shift_cm1 for line in standard.lines],
+                sorted(line.raman_shift_cm1 for line in standard.lines),
+            )
+
+        mixture = standards["ASTM-Toluene-Acetonitrile"]
+        self.assertEqual(
+            {line.species for line in mixture.lines}, {"Toluene", "Acetonitrile"}
         )
 
 

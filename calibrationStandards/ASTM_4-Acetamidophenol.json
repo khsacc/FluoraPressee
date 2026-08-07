@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "standard_id": "ASTM-4-Acetamidophenol",
+  "display_name": "4-Acetamidophenol (ASTM)",
+  "quantity": "raman_shift_cm1",
+  "source_url": "https://doi.org/10.1002/9780470027325.s0705",
+  "catalogue_metadata": {
+    "citation": "Carrabba, M.M. (2006). Wavenumber Standards for Raman Spectrometry. In Handbook of Vibrational Spectroscopy. John Wiley & Sons, Ltd. Table 3, 'ASTM / 4-Acetamidophenol' column.",
+    "note": "Values are the table's average Raman shift; uncertainty_cm1 stores the reported standard deviation, not an expanded/coverage-factor uncertainty."
+  },
+  "lines": [
+    {"raman_shift_cm1": 213.3, "species": "4-Acetamidophenol", "uncertainty_cm1": 1.77},
+    {"raman_shift_cm1": 329.2, "species": "4-Acetamidophenol", "uncertainty_cm1": 0.52},
+    {"raman_shift_cm1": 390.9, "species": "4-Acetamidophenol", "uncertainty_cm1": 0.76},
+    {"raman_shift_cm1": 465.1, "species": "4-Acetamidophenol", "uncertainty_cm1": 0.30},
+    {"raman_shift_cm1": 504.0, "species": "4-Acetamidophenol", "uncertainty_cm1": 0.60},
+    {"raman_shift_cm1": 651.6, "species": "4-Acetamidophenol", "uncertainty_cm1": 0.50},
+    {"raman_shift_cm1": 710.8, "species": "4-Acetamidophenol", "uncertainty_cm1": 0.68},
+    {"raman_shift_cm1": 797.2, "species": "4-Acetamidophenol", "uncertainty_cm1": 0.48},
+    {"raman_shift_cm1": 834.5, "species": "4-Acetamidophenol", "uncertainty_cm1": 0.46},
+    {"raman_shift_cm1": 857.9, "species": "4-Acetamidophenol", "uncertainty_cm1": 0.50},
+    {"raman_shift_cm1": 968.7, "species": "4-Acetamidophenol", "uncertainty_cm1": 0.60},
+    {"raman_shift_cm1": 1105.5, "species": "4-Acetamidophenol", "uncertainty_cm1": 0.27},
+    {"raman_shift_cm1": 1168.5, "species": "4-Acetamidophenol", "uncertainty_cm1": 0.65},
+    {"raman_shift_cm1": 1236.8, "species": "4-Acetamidophenol", "uncertainty_cm1": 0.46},
+    {"raman_shift_cm1": 1278.5, "species": "4-Acetamidophenol", "uncertainty_cm1": 0.45},
+    {"raman_shift_cm1": 1323.9, "species": "4-Acetamidophenol", "uncertainty_cm1": 0.46},
+    {"raman_shift_cm1": 1371.5, "species": "4-Acetamidophenol", "uncertainty_cm1": 0.11},
+    {"raman_shift_cm1": 1515.1, "species": "4-Acetamidophenol", "uncertainty_cm1": 0.70},
+    {"raman_shift_cm1": 1561.5, "species": "4-Acetamidophenol", "uncertainty_cm1": 0.52},
+    {"raman_shift_cm1": 1648.4, "species": "4-Acetamidophenol", "uncertainty_cm1": 0.50},
+    {"raman_shift_cm1": 2931.1, "species": "4-Acetamidophenol", "uncertainty_cm1": 0.63},
+    {"raman_shift_cm1": 3064.6, "species": "4-Acetamidophenol", "uncertainty_cm1": 0.31},
+    {"raman_shift_cm1": 3102.4, "species": "4-Acetamidophenol", "uncertainty_cm1": 0.95},
+    {"raman_shift_cm1": 3326.6, "species": "4-Acetamidophenol", "uncertainty_cm1": 2.18}
+  ]
+}

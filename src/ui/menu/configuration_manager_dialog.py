@@ -39,18 +39,38 @@ from PyQt6.QtWidgets import (
 from src.core.configuration_catalog import ConfigurationError, format_configuration_label
 
 
+_REFERENCE_KIND_LABELS = {
+    "emission_lines": "Emission-line standard",
+    "emission_lines_with_excitation": "Emission-line standard (converted via excitation)",
+    "raman_standard": "Raman-shift standard",
+}
+
+
+def _reference_kind_text(calibration: dict[str, Any]) -> str:
+    label = _REFERENCE_KIND_LABELS.get(
+        calibration.get("reference_kind"), calibration.get("reference_kind") or "—"
+    )
+    standard_names = [
+        standard.get("display_name") or standard.get("standard_id")
+        for standard in calibration.get("standards") or []
+    ]
+    if standard_names:
+        label += f" ({', '.join(standard_names)})"
+    return label
+
+
 def _format_record_details(record: dict[str, Any]) -> str:
     """Render every field of a stored configuration record for human inspection."""
     compatibility = record["compatibility"]
     spectrometer = record["spectrometer"]
     detector = record["detector"]
-    display = record.get("display", {})
     calibration = record["calibration"]
     coefficients = calibration["coefficients"]
 
     lines = [
         f"Configuration ID: {record['configuration_id']}",
         f"Slot ID: {record['slot_id']}",
+        f"Calibration profile ID: {record.get('calibration_profile_id') or '—'}",
         f"Created: {record['created_at']}",
         "",
         "Compatibility",
@@ -70,16 +90,13 @@ def _format_record_details(record: dict[str, Any]) -> str:
         f"Rows {detector['roi_start']}–{detector['roi_end']}",
         f"  Detector: {detector['detector_width']} x {detector['detector_height']}",
         "",
-        "Display",
-        f"  Mode: {display.get('mode', '—')}   "
-        f"Excitation: {display.get('excitation_wavelength_nm', '—')} nm",
-        "",
         "Calibration",
         f"  Source: {calibration.get('source', '—')}   Unit: {calibration['unit']}"
         + (
             f"   Excitation: {calibration['excitation_wavelength_nm']} nm"
             if calibration.get("excitation_wavelength_nm") is not None else ""
         ),
+        f"  Reference: {_reference_kind_text(calibration)}",
         f"  Coefficients: c0={coefficients['c0']!r}  c1={coefficients['c1']!r}  "
         f"c2={coefficients['c2']!r}",
     ]
@@ -94,8 +111,8 @@ class ConfigurationManagerDialog(QDialog):
 
     APPLIED_ROW_COLOR = QColor("#FCE8E8")
     _COLUMNS = (
-        "", "Hardware", "Grating", "Centre (nm)", "ROI",
-        "Calibration", "Status", "Created", "Last used",
+        "", "Hardware", "Grating", "Centre", "ROI",
+        "Axis", "Status", "Created", "Last used",
     )
 
     def __init__(
@@ -224,6 +241,27 @@ class ConfigurationManagerDialog(QDialog):
             camera += f" / {compatibility['camera_serial_number']}"
         return f"{spectrometer}  +  {camera}"
 
+    @staticmethod
+    def _center_text(summary):
+        center_nm = summary["center_wavelength_nm"]
+        excitation = summary.get("excitation_wavelength_nm")
+        if summary.get("axis_kind") == "raman_shift" and excitation:
+            shift_cm1 = (1e7 / excitation) - (1e7 / center_nm)
+            return f"{shift_cm1:.2f} cm⁻¹"
+        return f"{center_nm:.3f} nm"
+
+    @staticmethod
+    def _axis_text(summary):
+        if summary.get("migration_error"):
+            return "Unavailable"
+        axis_kind = summary.get("axis_kind")
+        if axis_kind == "raman_shift":
+            excitation = summary.get("excitation_wavelength_nm")
+            return f"Raman shift @ {excitation:.3f} nm" if excitation else "Raman shift"
+        if axis_kind == "wavelength":
+            return "Wavelength"
+        return summary.get("calibration", {}).get("unit") or "—"
+
     def _last_used_text(self, summary):
         last_used_at = summary.get("last_used_at")
         if not last_used_at:
@@ -271,10 +309,10 @@ class ConfigurationManagerDialog(QDialog):
             values = [
                 self._hardware_text(summary["compatibility"]),
                 f"{grating['grooves_per_mm']} g/mm (slot {grating['index']})",
-                f"{summary['center_wavelength_nm']:.3f}",
+                self._center_text(summary),
                 self._roi_text(summary["roi"]),
-                summary["calibration"]["unit"],
-                "Active" if summary.get("active") else "Archived",
+                self._axis_text(summary),
+                summary.get("status", "active" if summary.get("active") else "archived").capitalize(),
                 self._created_text(summary["created_at"]),
                 self._last_used_text(summary),
             ]
@@ -302,13 +340,14 @@ class ConfigurationManagerDialog(QDialog):
             self.btn_export.setEnabled(False)
 
     def _update_footer(self):
-        slot_total = self.catalog.list_all(active_only=True, limit=1)["total"]
+        slot_total = self.catalog.count_slots()
+        profile_total = self.catalog.count_profiles()
         version_total = self.catalog.list_all(active_only=False, limit=1)["total"]
         files = list(self.catalog.records_root.rglob("*.json"))
         size_mb = sum(path.stat().st_size for path in files) / (1024 * 1024)
         self.footer_label.setText(
-            f"{slot_total} slot(s) · {version_total} version(s) · "
-            f"{len(files)} file(s) · ~{size_mb:.2f} MB on disk"
+            f"{slot_total} slot(s) · {profile_total} calibration profile(s) · "
+            f"{version_total} version(s) · {len(files)} file(s) · ~{size_mb:.2f} MB on disk"
         )
 
     # -- selection / details ---------------------------------------------------
@@ -383,7 +422,17 @@ class ConfigurationManagerDialog(QDialog):
             if not checkbox.isChecked():
                 continue
             summary = self._row_summaries[row_index]
-            kind = "slot" if summary.get("active") else "version"
+            if not summary.get("active"):
+                # Not any profile's active row (or an orphaned/migration-error row,
+                # which nothing protects) -- always a plain single-version delete.
+                kind = "version"
+            elif summary.get("profile_count_for_slot", 1) > 1:
+                # This slot also has at least one other calibration profile (e.g. a
+                # Wavelength calibration alongside this Raman one) -- deleting this
+                # profile must not remove the whole physical slot.
+                kind = "profile"
+            else:
+                kind = "slot"
             plan.append((kind, summary))
         return plan
 
@@ -399,10 +448,17 @@ class ConfigurationManagerDialog(QDialog):
                 "(including the active calibration) and their files. "
                 "This cannot be undone."
             )
+        if kind == "profile":
+            return (
+                f"{warning}• Delete calibration profile {label} "
+                f"({self._axis_text(summary)}) — removes this profile's versions "
+                "only; other calibrations at the same physical condition "
+                "(grating/centre/ROI) are kept. This cannot be undone."
+            )
         created = self._created_text(summary["created_at"])
         return (
             f"{warning}• Delete archived version of {label} (created {created}) — "
-            "removes 1 file. The slot's active calibration is kept."
+            "removes 1 file. The active calibration is kept."
         )
 
     def _on_delete_clicked(self):
@@ -416,6 +472,7 @@ class ConfigurationManagerDialog(QDialog):
             return
 
         deleted_slots = 0
+        deleted_profiles = 0
         deleted_versions = 0
         file_errors: list[dict[str, str]] = []
         item_errors: list[str] = []
@@ -426,13 +483,26 @@ class ConfigurationManagerDialog(QDialog):
                 if kind == "slot":
                     result = self.catalog.delete_slot(summary["slot_id"])
                     deleted_slots += 1
+                    removed_ids = set(result["deleted_configuration_ids"])
+                elif kind == "profile":
+                    result = self.catalog.delete_profile(
+                        summary["calibration_profile_id"]
+                    )
+                    deleted_profiles += 1
+                    removed_ids = set(result["deleted_configuration_ids"])
                 else:
                     result = self.catalog.delete_configuration_version(
                         summary["configuration_id"]
                     )
                     deleted_versions += 1
+                    removed_ids = {result["configuration_id"]}
                 file_errors.extend(result["file_errors"])
-                if self._is_currently_loaded(summary):
+                # Checking only the selected row's own id misses this: deleting a
+                # whole profile/slot also removes every other version under it,
+                # which can include a configuration the GUI has loaded or is
+                # positioned at (e.g. an archived version applied remotely via the
+                # API) even though that version isn't the row the operator checked.
+                if {self.active_configuration_id, self.positioned_configuration_id} & removed_ids:
                     deleted_active = True
             except ConfigurationError as exc:
                 item_errors.append(str(exc))
@@ -441,8 +511,8 @@ class ConfigurationManagerDialog(QDialog):
             self.active_configuration_was_deleted = True
 
         summary_lines = [
-            f"Deleted {deleted_slots} slot(s) and {deleted_versions} archived "
-            "version(s) from the catalog."
+            f"Deleted {deleted_slots} slot(s), {deleted_profiles} calibration "
+            f"profile(s), and {deleted_versions} archived version(s) from the catalog."
         ]
         if file_errors:
             summary_lines.append(

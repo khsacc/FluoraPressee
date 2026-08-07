@@ -5,12 +5,22 @@ only a compact catalog used to find the active record for each measurement
 condition without scanning every historical JSON file.  This module has no Qt
 dependency so the GUI and the future HTTP API can share exactly the same
 selection and compatibility rules.
+
+A physical measurement condition (hardware + grating + centre + ROI) is a
+*slot*.  A slot can carry more than one independently-active calibration at
+once -- a Wavelength calibration and one or more Raman-shift calibrations (one
+per excitation laser) -- so calibrations are grouped into *calibration
+profiles* underneath their slot, keyed by (slot_id, axis_kind,
+excitation_wavelength_key).  Saving a new calibration only ever replaces the
+active version of its own profile; it never touches sibling profiles at the
+same slot.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import sqlite3
 import sys
@@ -22,8 +32,8 @@ from pathlib import Path
 from typing import Any
 
 
-CONFIGURATION_SCHEMA_VERSION = 1
-CATALOG_SCHEMA_VERSION = 2
+CONFIGURATION_SCHEMA_VERSION = 2
+CATALOG_SCHEMA_VERSION = 3
 
 
 class ConfigurationError(Exception):
@@ -42,6 +52,11 @@ class ConfigurationCompatibilityError(ConfigurationError):
         super().__init__("; ".join(reasons))
 
 
+class AmbiguousConfigurationProfileError(ConfigurationError):
+    """A bare slot_id has more than one active calibration profile and needs
+    (axis_kind, excitation_wavelength_nm) to disambiguate which one is meant."""
+
+
 def default_configuration_root() -> Path:
     """Return a per-user, writable application-data directory."""
     if sys.platform == "win32":
@@ -51,6 +66,20 @@ def default_configuration_root() -> Path:
     else:
         base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
     return base / "FluoraPressee" / "configurations"
+
+
+def excitation_wavelength_key(value_nm: Any) -> int:
+    """Integer key at 0.001 nm resolution, used both for calibration-profile
+    identity in the catalog and for the GUI's load-time excitation-mismatch
+    check (file_io_mixin.py) -- kept as one function so the two never drift."""
+    return round(float(value_nm) * 1000.0)
+
+
+_WAVELENGTH_EXCITATION_KEY = -1
+
+
+def _axis_kind_from_unit(unit: str) -> str:
+    return "raman_shift" if unit == "Raman shift" else "wavelength"
 
 
 def format_configuration_label(summary: dict[str, Any]) -> str:
@@ -78,7 +107,8 @@ def format_configuration_label(summary: dict[str, Any]) -> str:
 
 
 class ConfigurationCatalog:
-    """Persist immutable records and maintain one active version per slot."""
+    """Persist immutable records and maintain one active version per
+    calibration profile (not per slot -- see module docstring)."""
 
     def __init__(self, root: str | os.PathLike[str] | None = None):
         self.root = Path(root) if root is not None else default_configuration_root()
@@ -133,9 +163,27 @@ class ConfigurationCatalog:
                     updated_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS calibration_profiles (
+                    calibration_profile_id TEXT PRIMARY KEY,
+                    slot_id TEXT NOT NULL,
+                    axis_kind TEXT NOT NULL CHECK(axis_kind IN ('wavelength', 'raman_shift')),
+                    excitation_wavelength_key INTEGER NOT NULL,
+                    active_configuration_id TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY(slot_id) REFERENCES slots(slot_id),
+                    CHECK(
+                        (axis_kind = 'wavelength' AND excitation_wavelength_key = -1)
+                        OR (axis_kind = 'raman_shift' AND excitation_wavelength_key > 0)
+                    )
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_calibration_profiles_identity
+                    ON calibration_profiles(slot_id, axis_kind, excitation_wavelength_key);
+
                 CREATE TABLE IF NOT EXISTS configurations (
                     configuration_id TEXT PRIMARY KEY,
                     slot_id TEXT NOT NULL,
+                    calibration_profile_id TEXT,
                     created_at TEXT NOT NULL,
                     status TEXT NOT NULL CHECK(status IN ('active', 'archived')),
                     calibration_unit TEXT NOT NULL,
@@ -143,7 +191,8 @@ class ConfigurationCatalog:
                     sha256 TEXT NOT NULL,
                     last_used_at TEXT,
                     use_count INTEGER NOT NULL DEFAULT 0,
-                    FOREIGN KEY(slot_id) REFERENCES slots(slot_id)
+                    FOREIGN KEY(slot_id) REFERENCES slots(slot_id),
+                    FOREIGN KEY(calibration_profile_id) REFERENCES calibration_profiles(calibration_profile_id)
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_configurations_slot_created
@@ -161,6 +210,12 @@ class ConfigurationCatalog:
             conn.execute(
                 "INSERT OR IGNORE INTO catalog_meta(key, value) VALUES('revision', '0')"
             )
+            # idx_slots_hardware_identity/idx_configurations_profile_created reference
+            # columns (spectrometer_model/camera_model, calibration_profile_id) that a
+            # pre-existing database only gains via _migrate_catalog()'s ALTER TABLE
+            # steps -- CREATE TABLE IF NOT EXISTS above is a no-op against an existing
+            # table, so creating these indexes any earlier would fail against a real
+            # old database with "no such column" before migration ever runs.
             self._migrate_catalog(conn)
             conn.execute(
                 """
@@ -171,9 +226,20 @@ class ConfigurationCatalog:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_configurations_profile_created
+                ON configurations(calibration_profile_id, created_at DESC)
+                """
+            )
 
     def _migrate_catalog(self, conn: sqlite3.Connection) -> None:
-        """Upgrade catalog metadata while keeping immutable JSON records canonical."""
+        """Upgrade catalog metadata while keeping immutable JSON records canonical.
+
+        Staged so a catalog already at v2 (from a previous release of this app)
+        goes straight to the v2->v3 step, while a still-v1 catalog runs both
+        steps in one open.
+        """
         version_row = conn.execute(
             "SELECT value FROM catalog_meta WHERE key = 'schema_version'"
         ).fetchone()
@@ -181,6 +247,23 @@ class ConfigurationCatalog:
         if version >= CATALOG_SCHEMA_VERSION:
             return
 
+        if version < 2:
+            self._migrate_v1_to_v2(conn)
+            version = 2
+        if version < 3:
+            self._migrate_v2_to_v3(conn)
+            version = 3
+
+        conn.execute(
+            "UPDATE catalog_meta SET value = ? WHERE key = 'schema_version'",
+            (str(version),),
+        )
+        self._increment_revision(conn)
+
+    def _migrate_v1_to_v2(self, conn: sqlite3.Connection) -> None:
+        """Index hardware identity by model as well as serial number, and
+        separate serial-less hardware into its own namespace instead of
+        collapsing it into one."""
         columns = {
             row["name"] for row in conn.execute("PRAGMA table_info(slots)").fetchall()
         }
@@ -188,15 +271,18 @@ class ConfigurationCatalog:
             if column not in columns:
                 conn.execute(f"ALTER TABLE slots ADD COLUMN {column} TEXT")
 
-        # Catalog v1 indexed only serial numbers. Rebuild each slot signature
-        # from its active canonical record so serial-less hardware is separated
-        # and discoverable by model rather than collapsed into one namespace.
+        # Any one configuration under a slot carries the same
+        # compatibility/spectrometer/detector fields as every other (that's
+        # the definition of slot identity), so picking one representative row
+        # per slot is enough -- this must not join through
+        # slots.active_configuration_id, which is deprecated going forward
+        # and is never written by the current register_configuration().
         rows = conn.execute(
             """
-            SELECT s.slot_id, c.relative_path
+            SELECT s.slot_id, MIN(c.relative_path) AS relative_path
             FROM slots s
-            JOIN configurations c
-              ON c.configuration_id = s.active_configuration_id
+            JOIN configurations c ON c.slot_id = s.slot_id
+            GROUP BY s.slot_id
             """
         ).fetchall()
         for row in rows:
@@ -230,11 +316,121 @@ class ConfigurationCatalog:
                 ),
             )
 
-        conn.execute(
-            "UPDATE catalog_meta SET value = ? WHERE key = 'schema_version'",
-            (str(CATALOG_SCHEMA_VERSION),),
-        )
-        self._increment_revision(conn)
+    def _migrate_v2_to_v3(self, conn: sqlite3.Connection) -> None:
+        """Bootstrap calibration_profiles from every configuration's full
+        history (not just each slot's current active record -- the bug this
+        introduces calibration_profiles to fix means an older, still-valid
+        calibration of a different axis_kind/laser can already be sitting
+        archived behind a newer one)."""
+        columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(configurations)").fetchall()
+        }
+        if "calibration_profile_id" not in columns:
+            conn.execute(
+                "ALTER TABLE configurations ADD COLUMN calibration_profile_id TEXT "
+                "REFERENCES calibration_profiles(calibration_profile_id)"
+            )
+
+        rows = conn.execute(
+            "SELECT configuration_id, slot_id, relative_path, created_at "
+            "FROM configurations ORDER BY created_at ASC"
+        ).fetchall()
+
+        groups: dict[tuple[str, str, int], list[tuple[str, str]]] = {}
+        skipped: list[str] = []
+        for row in rows:
+            try:
+                record = json.loads(
+                    (self.root / row["relative_path"]).read_text(encoding="utf-8")
+                )
+                calibration = record["calibration"]
+                unit = calibration["unit"]
+                # A readable-but-corrupted unit must not silently fall back to
+                # "wavelength" via _axis_kind_from_unit()'s permissive default --
+                # that would resurrect a broken record as an active Wavelength
+                # profile instead of leaving it for Configuration Manager.
+                if unit not in ("Wavelength", "Raman shift"):
+                    raise ValueError(f"unrecognized calibration unit: {unit!r}")
+                axis_kind = _axis_kind_from_unit(unit)
+                coefficients = calibration["coefficients"]
+                if not all(
+                    math.isfinite(float(coefficients[name]))
+                    for name in ("c0", "c1", "c2")
+                ):
+                    raise ValueError("non-finite calibration coefficient")
+                if axis_kind == "raman_shift":
+                    excitation_nm = calibration["excitation_wavelength_nm"]
+                    # Checked before excitation_wavelength_key() so an Infinity/NaN
+                    # value (json.loads accepts these as an extension) is rejected
+                    # as a normal skip instead of an uncaught OverflowError that
+                    # would otherwise abort catalog opening entirely.
+                    if not math.isfinite(float(excitation_nm)):
+                        raise ValueError("non-finite excitation_wavelength_nm")
+                    key = excitation_wavelength_key(excitation_nm)
+                    if key <= 0:
+                        raise ValueError("non-positive excitation_wavelength_nm")
+                else:
+                    key = _WAVELENGTH_EXCITATION_KEY
+            except (
+                OSError,
+                json.JSONDecodeError,
+                KeyError,
+                TypeError,
+                ValueError,
+                OverflowError,
+            ):
+                skipped.append(row["configuration_id"])
+                continue
+            groups.setdefault((row["slot_id"], axis_kind, key), []).append(
+                (row["configuration_id"], row["created_at"])
+            )
+
+        now = self._now()
+        for (slot_id, axis_kind, key), entries in groups.items():
+            entries.sort(key=lambda entry: entry[1])
+            active_configuration_id = entries[-1][0]
+            # Find-or-create: a profile for this group may already exist (a
+            # retried/partial migration, or manual catalog_meta surgery in
+            # tests) -- INSERTing unconditionally would violate the identity
+            # UNIQUE index instead of reconciling.
+            existing_profile = conn.execute(
+                "SELECT calibration_profile_id FROM calibration_profiles "
+                "WHERE slot_id = ? AND axis_kind = ? AND excitation_wavelength_key = ?",
+                (slot_id, axis_kind, key),
+            ).fetchone()
+            if existing_profile is None:
+                profile_id = self._new_id("calprof")
+                conn.execute(
+                    """
+                    INSERT INTO calibration_profiles(
+                        calibration_profile_id, slot_id, axis_kind, excitation_wavelength_key,
+                        active_configuration_id, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (profile_id, slot_id, axis_kind, key, active_configuration_id, now, now),
+                )
+            else:
+                profile_id = existing_profile["calibration_profile_id"]
+                conn.execute(
+                    "UPDATE calibration_profiles SET active_configuration_id = ?, "
+                    "updated_at = ? WHERE calibration_profile_id = ?",
+                    (active_configuration_id, now, profile_id),
+                )
+            for configuration_id, _ in entries:
+                status = "active" if configuration_id == active_configuration_id else "archived"
+                conn.execute(
+                    "UPDATE configurations SET calibration_profile_id = ?, status = ? "
+                    "WHERE configuration_id = ?",
+                    (profile_id, status, configuration_id),
+                )
+
+        if skipped:
+            print(
+                f"Configuration catalog v2->v3 migration: {len(skipped)} record(s) "
+                f"could not be read and were left without a calibration profile "
+                f"(visible/deletable via Configuration Manager): {skipped}"
+            )
 
     @staticmethod
     def _new_id(prefix: str) -> str:
@@ -262,19 +458,28 @@ class ConfigurationCatalog:
             calibration = draft["calibration"]
             int(spectrometer["grating_index"])
             int(spectrometer["grating_grooves_per_mm"])
-            cls._center_pm(spectrometer["target_center_wavelength_nm"])
+            center_wl = float(spectrometer["target_center_wavelength_nm"])
             mode = detector["roi_mode"]
             roi_start = int(detector["roi_start"])
             roi_end = int(detector["roi_end"])
             coefficients = calibration["coefficients"]
-            float(coefficients["c0"])
-            float(coefficients["c1"])
-            float(coefficients["c2"])
+            c0 = float(coefficients["c0"])
+            c1 = float(coefficients["c1"])
+            c2 = float(coefficients["c2"])
             unit = calibration["unit"]
         except (KeyError, TypeError, ValueError) as exc:
             raise ConfigurationValidationError(
                 f"Incomplete configuration record: {exc}"
             ) from exc
+
+        for name, value in (
+            ("spectrometer.target_center_wavelength_nm", center_wl),
+            ("calibration.coefficients.c0", c0),
+            ("calibration.coefficients.c1", c1),
+            ("calibration.coefficients.c2", c2),
+        ):
+            if not math.isfinite(value):
+                raise ConfigurationValidationError(f"{name} must be a finite number")
 
         if mode not in {"1d_roi", "1d_full", "2d"}:
             raise ConfigurationValidationError(f"Unsupported ROI mode: {mode!r}")
@@ -282,10 +487,48 @@ class ConfigurationCatalog:
             raise ConfigurationValidationError("ROI must satisfy 0 <= start < end")
         if unit not in {"Wavelength", "Raman shift"}:
             raise ConfigurationValidationError(f"Unsupported calibration unit: {unit!r}")
-        if unit == "Raman shift" and calibration.get("excitation_wavelength_nm") is None:
+
+        excitation = calibration.get("excitation_wavelength_nm")
+        if unit == "Raman shift":
+            if excitation is None:
+                raise ConfigurationValidationError(
+                    "Raman shift calibration requires excitation_wavelength_nm"
+                )
+            excitation = float(excitation)
+            if not math.isfinite(excitation) or excitation <= 0:
+                raise ConfigurationValidationError(
+                    "calibration.excitation_wavelength_nm must be a finite positive number"
+                )
+        elif excitation is not None:
             raise ConfigurationValidationError(
-                "Raman shift calibration requires excitation_wavelength_nm"
+                "Wavelength calibration must not include excitation_wavelength_nm"
             )
+
+        reference_kind = calibration.get("reference_kind")
+        if reference_kind is not None and reference_kind not in (
+            "emission_lines", "emission_lines_with_excitation", "raman_standard"
+        ):
+            raise ConfigurationValidationError(
+                f"Unsupported calibration reference_kind: {reference_kind!r}"
+            )
+        standards = calibration.get("standards")
+        if standards is not None and not isinstance(standards, list):
+            raise ConfigurationValidationError("calibration.standards must be a list")
+
+        raw_spectrum = calibration.get("raw_spectrum")
+        if raw_spectrum is not None:
+            if not isinstance(raw_spectrum, list) or not raw_spectrum:
+                raise ConfigurationValidationError(
+                    "calibration.raw_spectrum must be a non-empty list"
+                )
+            try:
+                if not all(math.isfinite(float(value)) for value in raw_spectrum):
+                    raise ValueError
+            except (TypeError, ValueError) as exc:
+                raise ConfigurationValidationError(
+                    "calibration.raw_spectrum must contain only finite numbers"
+                ) from exc
+
         if not isinstance(compatibility, dict):
             raise ConfigurationValidationError("compatibility must be an object")
         for device in ("spectrometer", "camera"):
@@ -320,12 +563,28 @@ class ConfigurationCatalog:
 
     @staticmethod
     def _record_bytes(record: dict[str, Any]) -> bytes:
-        return (json.dumps(record, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+        try:
+            payload = json.dumps(record, indent=2, ensure_ascii=False, allow_nan=False)
+        except ValueError as exc:
+            raise ConfigurationValidationError(
+                f"Configuration record contains a non-finite value: {exc}"
+            ) from exc
+        return (payload + "\n").encode("utf-8")
 
     def register_configuration(self, draft: dict[str, Any]) -> dict[str, Any]:
-        """Register a new immutable version and make it active for its slot."""
+        """Register a new immutable version and make it active for its
+        calibration profile (physical slot + axis_kind + excitation laser).
+        Sibling profiles at the same slot (a different axis_kind, or the same
+        axis_kind at a different excitation wavelength) are left untouched."""
         self._validate_draft(draft)
         signature = self._signature(draft)
+        calibration = draft["calibration"]
+        axis_kind = _axis_kind_from_unit(calibration["unit"])
+        excitation_key = (
+            excitation_wavelength_key(calibration["excitation_wavelength_nm"])
+            if axis_kind == "raman_shift"
+            else _WAVELENGTH_EXCITATION_KEY
+        )
         created_at = self._now()
         configuration_id = self._new_id("cfg")
         final_path: Path | None = None
@@ -337,11 +596,34 @@ class ConfigurationCatalog:
             ).fetchone()
             slot_id = slot_row["slot_id"] if slot_row else self._new_id("slot")
 
+            profile_row = conn.execute(
+                "SELECT * FROM calibration_profiles WHERE slot_id = ? "
+                "AND axis_kind = ? AND excitation_wavelength_key = ?",
+                (slot_id, axis_kind, excitation_key),
+            ).fetchone()
+            calibration_profile_id = (
+                profile_row["calibration_profile_id"]
+                if profile_row else self._new_id("calprof")
+            )
+
             record = deepcopy(draft)
             record["schema_version"] = CONFIGURATION_SCHEMA_VERSION
             record["configuration_id"] = configuration_id
             record["slot_id"] = slot_id
+            record["calibration_profile_id"] = calibration_profile_id
             record["created_at"] = created_at
+            # Written to disk (not just defaulted on read by _normalize_record)
+            # so a caller that omits them -- direct register_configuration()
+            # use, not just the calibration dialog -- still produces a
+            # self-describing record on disk.
+            record["calibration"].setdefault(
+                "reference_kind",
+                "emission_lines_with_excitation"
+                if record["calibration"].get("unit") == "Raman shift"
+                else "emission_lines",
+            )
+            record["calibration"].setdefault("standards", [])
+            record["calibration"].setdefault("raw_spectrum", None)
 
             relative_path = Path(
                 "records",
@@ -397,31 +679,53 @@ class ConfigurationCatalog:
                     )
                 else:
                     conn.execute(
-                        "UPDATE configurations SET status = 'archived' "
-                        "WHERE configuration_id = ?",
-                        (slot_row["active_configuration_id"],),
+                        "UPDATE slots SET updated_at = ? WHERE slot_id = ?",
+                        (created_at, slot_id),
+                    )
+
+                if profile_row is None:
+                    conn.execute(
+                        """
+                        INSERT INTO calibration_profiles(
+                            calibration_profile_id, slot_id, axis_kind,
+                            excitation_wavelength_key, active_configuration_id,
+                            created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            calibration_profile_id, slot_id, axis_kind, excitation_key,
+                            configuration_id, created_at, created_at,
+                        ),
+                    )
+                else:
+                    if profile_row["active_configuration_id"] is not None:
+                        conn.execute(
+                            "UPDATE configurations SET status = 'archived' "
+                            "WHERE configuration_id = ?",
+                            (profile_row["active_configuration_id"],),
+                        )
+                    conn.execute(
+                        "UPDATE calibration_profiles SET active_configuration_id = ?, "
+                        "updated_at = ? WHERE calibration_profile_id = ?",
+                        (configuration_id, created_at, calibration_profile_id),
                     )
 
                 conn.execute(
                     """
                     INSERT INTO configurations(
-                        configuration_id, slot_id, created_at, status,
-                        calibration_unit, relative_path, sha256
-                    ) VALUES (?, ?, ?, 'active', ?, ?, ?)
+                        configuration_id, slot_id, calibration_profile_id, created_at,
+                        status, calibration_unit, relative_path, sha256
+                    ) VALUES (?, ?, ?, ?, 'active', ?, ?, ?)
                     """,
                     (
                         configuration_id,
                         slot_id,
+                        calibration_profile_id,
                         created_at,
                         record["calibration"]["unit"],
                         relative_path.as_posix(),
                         digest,
                     ),
-                )
-                conn.execute(
-                    "UPDATE slots SET active_configuration_id = ?, updated_at = ? "
-                    "WHERE slot_id = ?",
-                    (configuration_id, created_at, slot_id),
                 )
                 self._increment_revision(conn)
                 conn.commit()
@@ -452,10 +756,63 @@ class ConfigurationCatalog:
             ).fetchone()
         return int(row["value"])
 
+    def count_slots(self) -> int:
+        with self._connection() as conn:
+            return int(
+                conn.execute("SELECT COUNT(*) AS count FROM slots").fetchone()["count"]
+            )
+
+    def count_profiles(self) -> int:
+        with self._connection() as conn:
+            return int(
+                conn.execute(
+                    "SELECT COUNT(*) AS count FROM calibration_profiles"
+                ).fetchone()["count"]
+            )
+
+    @staticmethod
+    def _normalize_record(
+        record: dict[str, Any], db_calibration_profile_id: str | None
+    ) -> dict[str, Any]:
+        version = record.get("schema_version", 1)
+        if version > CONFIGURATION_SCHEMA_VERSION:
+            raise ConfigurationError(
+                f"Configuration record schema_version {version} is newer than this "
+                f"application supports (max {CONFIGURATION_SCHEMA_VERSION})"
+            )
+        record = deepcopy(record)
+        record.pop("display", None)
+        if version < 2:
+            record["schema_version"] = CONFIGURATION_SCHEMA_VERSION
+            record["calibration_profile_id"] = db_calibration_profile_id
+        elif (
+            db_calibration_profile_id is not None
+            and record.get("calibration_profile_id") != db_calibration_profile_id
+        ):
+            raise ConfigurationError(
+                f"Configuration {record.get('configuration_id')} calibration_profile_id "
+                "does not match the catalog index; the record or database may be corrupt."
+            )
+        # Applies regardless of schema_version: any record written before
+        # reference_kind/standards/raw_spectrum existed (v1, or v2 saved
+        # before a given field was ever produced) is missing them just the
+        # same, and all are informational -- there is no version's shape
+        # they'd conflict with.
+        calibration = record.get("calibration", {})
+        calibration.setdefault(
+            "reference_kind",
+            "emission_lines_with_excitation"
+            if calibration.get("unit") == "Raman shift"
+            else "emission_lines",
+        )
+        calibration.setdefault("standards", [])
+        calibration.setdefault("raw_spectrum", None)
+        return record
+
     def get_configuration(self, configuration_id: str) -> dict[str, Any]:
         with self._connection() as conn:
             row = conn.execute(
-                "SELECT relative_path, sha256 FROM configurations "
+                "SELECT relative_path, sha256, calibration_profile_id FROM configurations "
                 "WHERE configuration_id = ?",
                 (configuration_id,),
             ).fetchone()
@@ -473,18 +830,28 @@ class ConfigurationCatalog:
                 f"Configuration file failed its integrity check: {configuration_id}"
             )
         try:
-            return json.loads(payload)
+            record = json.loads(payload)
         except json.JSONDecodeError as exc:
             raise ConfigurationError(
                 f"Configuration file is invalid JSON: {configuration_id}"
             ) from exc
+        return self._normalize_record(record, row["calibration_profile_id"])
 
     def _summary_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        is_orphaned = row["calibration_profile_id"] is None
+        active = (
+            not is_orphaned
+            and row["configuration_id"] == row["profile_active_configuration_id"]
+        )
+        excitation_key = row["excitation_wavelength_key"] if not is_orphaned else None
         summary = {
             "slot_id": row["slot_id"],
             "configuration_id": row["configuration_id"],
-            "active_configuration_id": row["active_configuration_id"],
-            "active": row["configuration_id"] == row["active_configuration_id"],
+            "calibration_profile_id": row["calibration_profile_id"],
+            "active_configuration_id": (
+                row["profile_active_configuration_id"] if not is_orphaned else None
+            ),
+            "active": active,
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
             "grating": {
@@ -498,9 +865,16 @@ class ConfigurationCatalog:
                 "end": row["roi_end"],
             },
             "calibration": {
-                "available": True,
+                "available": not is_orphaned,
                 "unit": row["calibration_unit"],
             },
+            "axis_kind": row["axis_kind"] if not is_orphaned else None,
+            "excitation_wavelength_nm": (
+                excitation_key / 1000.0
+                if excitation_key is not None and excitation_key > 0
+                else None
+            ),
+            "profile_count_for_slot": row["profile_count_for_slot"],
             "compatibility": {
                 "spectrometer_model": row["spectrometer_model"],
                 "spectrometer_serial_number": row["spectrometer_serial"],
@@ -513,7 +887,8 @@ class ConfigurationCatalog:
             summary["last_used_at"] = row["last_used_at"]
             summary["use_count"] = row["use_count"]
         if "status" in available_columns:
-            summary["status"] = row["status"]
+            summary["status"] = "unavailable" if is_orphaned else row["status"]
+            summary["migration_error"] = is_orphaned
         summary["display_label"] = format_configuration_label(summary)
         return summary
 
@@ -585,6 +960,30 @@ class ConfigurationCatalog:
         if reasons:
             raise ConfigurationCompatibilityError(reasons)
 
+    @staticmethod
+    def _base_select(*, include_management_columns: bool) -> str:
+        management_columns = (
+            ", c.status, c.last_used_at, c.use_count" if include_management_columns else ""
+        )
+        join = "LEFT JOIN" if include_management_columns else "JOIN"
+        return f"""
+            SELECT
+                c.configuration_id, c.slot_id, c.calibration_profile_id, c.created_at,
+                c.calibration_unit{management_columns},
+                p.axis_kind, p.excitation_wavelength_key,
+                p.active_configuration_id AS profile_active_configuration_id,
+                (SELECT COUNT(*) FROM calibration_profiles p2 WHERE p2.slot_id = s.slot_id)
+                    AS profile_count_for_slot,
+                s.updated_at,
+                s.spectrometer_model, s.spectrometer_serial,
+                s.camera_model, s.camera_serial,
+                s.grating_index, s.grating_grooves_per_mm,
+                s.center_position_pm, s.roi_mode, s.roi_start, s.roi_end
+            FROM configurations c
+            JOIN slots s ON s.slot_id = c.slot_id
+            {join} calibration_profiles p ON p.calibration_profile_id = c.calibration_profile_id
+        """
+
     def list_all(
         self,
         *,
@@ -596,6 +995,13 @@ class ConfigurationCatalog:
         compatibility. For a management/inspection UI only -- callers that
         need to know whether a record can actually be applied to the
         connected hardware must use list_selectable() instead.
+
+        Uses a LEFT join to calibration_profiles (unlike list_selectable's
+        INNER join) so a configuration a migration couldn't assign to a
+        profile (a damaged/unreadable JSON file at upgrade time) still shows
+        up here -- tagged via summary["migration_error"] -- instead of
+        silently disappearing from the one screen an operator could use to
+        find and delete it.
         """
         if limit < 1 or limit > 1000:
             raise ValueError("limit must be between 1 and 1000")
@@ -603,22 +1009,11 @@ class ConfigurationCatalog:
             raise ValueError("offset must be non-negative")
 
         where = (
-            "WHERE c.configuration_id = s.active_configuration_id"
+            "WHERE (c.configuration_id = p.active_configuration_id "
+            "OR c.calibration_profile_id IS NULL)"
             if active_only else ""
         )
-        select_from = f"""
-            SELECT
-                c.configuration_id, c.slot_id, c.created_at, c.calibration_unit,
-                c.last_used_at, c.use_count, c.status,
-                s.active_configuration_id, s.updated_at,
-                s.spectrometer_model, s.spectrometer_serial,
-                s.camera_model, s.camera_serial,
-                s.grating_index, s.grating_grooves_per_mm,
-                s.center_position_pm, s.roi_mode, s.roi_start, s.roi_end
-            FROM configurations c
-            JOIN slots s ON s.slot_id = c.slot_id
-            {where}
-        """
+        select_from = self._base_select(include_management_columns=True) + where
         with self._connection() as conn:
             conn.execute("BEGIN")
             revision = int(
@@ -661,7 +1056,7 @@ class ConfigurationCatalog:
         conditions = []
         parameters: list[Any] = []
         if active_only:
-            conditions.append("c.configuration_id = s.active_configuration_id")
+            conditions.append("c.configuration_id = p.active_configuration_id")
         if not include_incompatible:
             for serial_column, model_column, device in (
                 ("s.spectrometer_serial", "s.spectrometer_model", "spectrometer"),
@@ -705,18 +1100,7 @@ class ConfigurationCatalog:
                 parameters.append(int(detector_height))
 
         where = "WHERE " + " AND ".join(conditions) if conditions else ""
-        select_from = f"""
-            SELECT
-                c.configuration_id, c.slot_id, c.created_at, c.calibration_unit,
-                s.active_configuration_id, s.updated_at,
-                s.spectrometer_model, s.spectrometer_serial,
-                s.camera_model, s.camera_serial,
-                s.grating_index, s.grating_grooves_per_mm,
-                s.center_position_pm, s.roi_mode, s.roi_start, s.roi_end
-            FROM configurations c
-            JOIN slots s ON s.slot_id = c.slot_id
-            {where}
-        """
+        select_from = self._base_select(include_management_columns=False) + where
         with self._connection() as conn:
             conn.execute("BEGIN")
             revision = int(
@@ -751,9 +1135,17 @@ class ConfigurationCatalog:
         }
 
     def resolve_slots(
-        self, slot_ids: list[str], hardware_context: dict[str, Any]
+        self, slot_ids: list[str | dict[str, Any]], hardware_context: dict[str, Any]
     ) -> dict[str, Any]:
-        """Resolve stable slot references to exact active record IDs."""
+        """Resolve stable slot/profile references to exact active record IDs.
+
+        Each entry is either a bare slot_id string -- which resolves only if
+        that slot currently has exactly one active calibration profile, the
+        common case -- or a dict {slot_id, axis_kind, excitation_wavelength_nm}
+        that names the profile explicitly. A bare slot_id with more than one
+        active profile raises AmbiguousConfigurationProfileError rather than
+        guessing which calibration was meant.
+        """
         resolved_ids = []
         with self._connection() as conn:
             conn.execute("BEGIN")
@@ -762,16 +1154,48 @@ class ConfigurationCatalog:
                     "SELECT value FROM catalog_meta WHERE key = 'revision'"
                 ).fetchone()["value"]
             )
-            for slot_id in slot_ids:
-                row = conn.execute(
-                    "SELECT active_configuration_id FROM slots WHERE slot_id = ?",
-                    (slot_id,),
-                ).fetchone()
-                if row is None or row["active_configuration_id"] is None:
-                    raise ConfigurationError(f"No active configuration for slot: {slot_id}")
-                resolved_ids.append(
-                    (slot_id, row["active_configuration_id"])
-                )
+            for entry in slot_ids:
+                if isinstance(entry, dict):
+                    slot_id = entry["slot_id"]
+                    axis_kind = entry.get("axis_kind")
+                    excitation_nm = entry.get("excitation_wavelength_nm")
+                else:
+                    slot_id = entry
+                    axis_kind = None
+                    excitation_nm = None
+
+                if axis_kind is not None:
+                    key = (
+                        excitation_wavelength_key(excitation_nm)
+                        if axis_kind == "raman_shift" and excitation_nm is not None
+                        else _WAVELENGTH_EXCITATION_KEY
+                    )
+                    profile_row = conn.execute(
+                        "SELECT active_configuration_id FROM calibration_profiles "
+                        "WHERE slot_id = ? AND axis_kind = ? AND excitation_wavelength_key = ?",
+                        (slot_id, axis_kind, key),
+                    ).fetchone()
+                    if profile_row is None or profile_row["active_configuration_id"] is None:
+                        raise ConfigurationError(
+                            f"No active configuration for slot {slot_id} "
+                            f"(axis_kind={axis_kind!r})"
+                        )
+                    resolved_ids.append((slot_id, profile_row["active_configuration_id"]))
+                else:
+                    profile_rows = conn.execute(
+                        "SELECT active_configuration_id FROM calibration_profiles "
+                        "WHERE slot_id = ? AND active_configuration_id IS NOT NULL",
+                        (slot_id,),
+                    ).fetchall()
+                    if not profile_rows:
+                        raise ConfigurationError(f"No active configuration for slot: {slot_id}")
+                    if len(profile_rows) > 1:
+                        raise AmbiguousConfigurationProfileError(
+                            f"Slot {slot_id} has {len(profile_rows)} active calibration "
+                            "profiles; specify axis_kind (and excitation_wavelength_nm "
+                            "for Raman shift) to disambiguate."
+                        )
+                    resolved_ids.append((slot_id, profile_rows[0]["active_configuration_id"]))
 
         resolved = []
         for slot_id, configuration_id in resolved_ids:
@@ -819,24 +1243,35 @@ class ConfigurationCatalog:
         """Delete one archived (non-active) version: its catalog row and its
         immutable JSON file.
 
-        Refuses to delete a slot's current active version -- use delete_slot()
-        for that -- so a slot can never be left with active_configuration_id
-        pointing at a row that no longer exists.
+        Refuses to delete a configuration that is its own calibration
+        profile's current active version -- use delete_profile() or
+        delete_slot() for that -- so a profile can never be left with
+        active_configuration_id pointing at a row that no longer exists. A
+        configuration with no calibration_profile_id at all (a
+        migration-skipped/damaged record) is not protected by anything and can
+        always be deleted directly.
         """
         with self._connection() as conn:
             conn.execute("BEGIN IMMEDIATE")
             row = conn.execute(
-                "SELECT c.slot_id, c.relative_path, s.active_configuration_id "
-                "FROM configurations c JOIN slots s ON s.slot_id = c.slot_id "
+                "SELECT c.slot_id, c.relative_path, c.calibration_profile_id, "
+                "p.active_configuration_id AS profile_active_configuration_id "
+                "FROM configurations c "
+                "LEFT JOIN calibration_profiles p "
+                "  ON p.calibration_profile_id = c.calibration_profile_id "
                 "WHERE c.configuration_id = ?",
                 (configuration_id,),
             ).fetchone()
             if row is None:
                 raise ConfigurationError(f"Unknown configuration: {configuration_id}")
-            if configuration_id == row["active_configuration_id"]:
+            if (
+                row["calibration_profile_id"] is not None
+                and configuration_id == row["profile_active_configuration_id"]
+            ):
                 raise ConfigurationError(
-                    "Cannot delete a slot's active configuration version; "
-                    "use delete_slot() to remove the whole measurement condition."
+                    "Cannot delete a calibration profile's active configuration "
+                    "version; use delete_profile() to remove the whole profile or "
+                    "delete_slot() to remove the whole measurement condition."
                 )
             slot_id, relative_path = row["slot_id"], row["relative_path"]
             conn.execute(
@@ -854,10 +1289,54 @@ class ConfigurationCatalog:
             "catalog_revision": revision,
         }
 
+    def delete_profile(self, calibration_profile_id: str) -> dict[str, Any]:
+        """Delete one calibration profile -- every configuration version
+        under it, plus the profile row itself -- leaving the physical slot
+        and any sibling profiles (a different axis_kind, or the same
+        axis_kind at a different excitation wavelength) untouched.
+        """
+        with self._connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            if conn.execute(
+                "SELECT 1 FROM calibration_profiles WHERE calibration_profile_id = ?",
+                (calibration_profile_id,),
+            ).fetchone() is None:
+                raise ConfigurationError(
+                    f"Unknown calibration profile: {calibration_profile_id}"
+                )
+            config_rows = conn.execute(
+                "SELECT configuration_id, relative_path FROM configurations "
+                "WHERE calibration_profile_id = ?",
+                (calibration_profile_id,),
+            ).fetchall()
+            conn.execute(
+                "DELETE FROM configurations WHERE calibration_profile_id = ?",
+                (calibration_profile_id,),
+            )
+            conn.execute(
+                "DELETE FROM calibration_profiles WHERE calibration_profile_id = ?",
+                (calibration_profile_id,),
+            )
+            revision = self._increment_revision(conn)
+
+        deleted, errors = self._unlink_best_effort(
+            [row["relative_path"] for row in config_rows]
+        )
+        return {
+            "calibration_profile_id": calibration_profile_id,
+            "deleted_configuration_ids": [
+                row["configuration_id"] for row in config_rows
+            ],
+            "deleted_files": deleted,
+            "file_errors": errors,
+            "catalog_revision": revision,
+        }
+
     def delete_slot(self, slot_id: str) -> dict[str, Any]:
-        """Delete an entire measurement-condition slot: every version (active
-        and archived) and every one of their JSON files. This is the "I don't
-        need this condition any more" operation.
+        """Delete an entire measurement-condition slot: every calibration
+        profile at it, every version (active and archived) of each, and every
+        one of their JSON files. This is the "I don't need this condition any
+        more" operation.
         """
         with self._connection() as conn:
             conn.execute("BEGIN IMMEDIATE")
@@ -870,9 +1349,9 @@ class ConfigurationCatalog:
                 "WHERE slot_id = ?",
                 (slot_id,),
             ).fetchall()
-            # configurations.slot_id -> slots.slot_id FK (PRAGMA foreign_keys=ON
-            # in _connect()): children must be deleted before the parent row.
+            # FK order: configurations -> calibration_profiles -> slots.
             conn.execute("DELETE FROM configurations WHERE slot_id = ?", (slot_id,))
+            conn.execute("DELETE FROM calibration_profiles WHERE slot_id = ?", (slot_id,))
             conn.execute("DELETE FROM slots WHERE slot_id = ?", (slot_id,))
             revision = self._increment_revision(conn)
 

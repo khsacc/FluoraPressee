@@ -1,3 +1,4 @@
+import math
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -6,17 +7,19 @@ from src.core.pressureCalc import PressureCalculator
 
 
 class CalibrationRequest(BaseModel):
-    c0: float
-    c1: float
-    c2: float
+    c0: float = Field(allow_inf_nan=False)
+    c1: float = Field(allow_inf_nan=False)
+    c2: float = Field(allow_inf_nan=False)
     unit: Literal["Wavelength", "Raman shift"]
-    laser_wavelength_nm: float | None = None
+    laser_wavelength_nm: float | None = Field(default=None, gt=0, allow_inf_nan=False)
     label: str = "api"
 
     @model_validator(mode="after")
     def _require_laser_wavelength_for_raman(self):
         if self.unit == "Raman shift" and self.laser_wavelength_nm is None:
             raise ValueError('laser_wavelength_nm is required when unit="Raman shift"')
+        if self.unit == "Wavelength" and self.laser_wavelength_nm is not None:
+            raise ValueError('laser_wavelength_nm must not be set when unit="Wavelength"')
         return self
 
 
@@ -171,8 +174,40 @@ class ConfigurationRecordResponse(BaseModel):
     incompatibility_reasons: list[str]
 
 
+class SlotResolutionRequest(BaseModel):
+    """Names one calibration profile explicitly, for a slot_id that has more
+    than one active profile (e.g. a Wavelength calibration and a Raman-shift
+    calibration at the same grating/centre/ROI) -- a bare slot_id string only
+    resolves when the slot currently has exactly one active profile."""
+    slot_id: str
+    axis_kind: Literal["wavelength", "raman_shift"] | None = None
+    excitation_wavelength_nm: float | None = None
+
+    @model_validator(mode="after")
+    def _axis_kind_and_excitation_are_consistent(self):
+        # Without this, an incomplete/contradictory selector wouldn't error --
+        # it would silently resolve something other than what the caller meant
+        # (e.g. excitation_wavelength_nm set but axis_kind omitted still
+        # resolves as a bare slot_id, ignoring the excitation value entirely).
+        if self.axis_kind == "raman_shift":
+            if self.excitation_wavelength_nm is None:
+                raise ValueError(
+                    'excitation_wavelength_nm is required when axis_kind="raman_shift"'
+                )
+            if (
+                not math.isfinite(self.excitation_wavelength_nm)
+                or self.excitation_wavelength_nm <= 0
+            ):
+                raise ValueError("excitation_wavelength_nm must be a finite, positive number")
+        elif self.excitation_wavelength_nm is not None:
+            raise ValueError(
+                'excitation_wavelength_nm can only be set together with axis_kind="raman_shift"'
+            )
+        return self
+
+
 class ResolveConfigurationsRequest(BaseModel):
-    slot_ids: list[str] = Field(min_length=1)
+    slot_ids: list[str | SlotResolutionRequest] = Field(min_length=1)
 
 
 class ResolveConfigurationsResponse(BaseModel):

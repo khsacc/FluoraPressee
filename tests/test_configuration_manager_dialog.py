@@ -69,6 +69,12 @@ class _Catalog:
             "catalog_revision": 1, "limit": limit, "offset": offset,
         }
 
+    def count_slots(self):
+        return len({item["slot_id"] for item in self._all_summaries()})
+
+    def count_profiles(self):
+        return len([item for item in self._all_summaries() if item["status"] == "active"])
+
     def get_configuration(self, configuration_id):
         if configuration_id == "cfg-broken":
             raise ConfigurationError("broken record")
@@ -134,7 +140,7 @@ class ConfigurationManagerDialogTests(unittest.TestCase):
                 self.dialog.table.horizontalHeaderItem(i).text()
                 for i in range(1, 9)
             ],
-            ["Hardware", "Grating", "Centre (nm)", "ROI", "Calibration",
+            ["Hardware", "Grating", "Centre (nm)", "ROI", "Axis",
              "Status", "Created", "Last used"],
         )
 
@@ -192,6 +198,123 @@ class ConfigurationManagerDialogTests(unittest.TestCase):
 
         self.assertEqual(self.catalog.deleted_slots, ["slot-1"])
         self.assertEqual(self.catalog.deleted_versions, [])
+        self.assertTrue(self.dialog.active_configuration_was_deleted)
+
+
+class _MultiProfileCatalog(_Catalog):
+    """A slot with two simultaneously-active calibration profiles: Wavelength
+    and Raman shift @ 532 nm -- exercises the "delete profile" tier, which
+    must not touch the sibling profile or the physical slot."""
+
+    def __init__(self):
+        super().__init__()
+        self.deleted_profiles = []
+
+    def _all_summaries(self):
+        wavelength = self._summary("cfg-wl", "slot-1", "active", "2026-07-23T10:00:00+09:00")
+        wavelength["calibration_profile_id"] = "calprof-wl"
+        wavelength["axis_kind"] = "wavelength"
+        wavelength["excitation_wavelength_nm"] = None
+        wavelength["profile_count_for_slot"] = 2
+
+        raman = self._summary("cfg-raman", "slot-1", "active", "2026-07-23T11:00:00+09:00")
+        raman["calibration_profile_id"] = "calprof-raman-532"
+        raman["axis_kind"] = "raman_shift"
+        raman["excitation_wavelength_nm"] = 532.0
+        raman["profile_count_for_slot"] = 2
+        raman["calibration"] = {"available": True, "unit": "Raman shift"}
+
+        return [wavelength, raman]
+
+    def delete_profile(self, calibration_profile_id):
+        self.deleted_profiles.append(calibration_profile_id)
+        return {
+            "calibration_profile_id": calibration_profile_id,
+            "deleted_configuration_ids": ["cfg-raman"],
+            "deleted_files": [], "file_errors": [], "catalog_revision": 2,
+        }
+
+
+class ConfigurationManagerProfileDeletionTests(unittest.TestCase):
+    def setUp(self):
+        self.app = QApplication.instance() or QApplication([])
+        self.catalog = _MultiProfileCatalog()
+        self.dialog = ConfigurationManagerDialog(self.catalog, parent=None)
+
+    def _checkbox_for(self, configuration_id):
+        for row, summary in enumerate(self.dialog._row_summaries):
+            if summary["configuration_id"] == configuration_id:
+                return self.dialog.table.cellWidget(row, 0).findChild(QCheckBox)
+        raise AssertionError(f"{configuration_id} not shown")
+
+    def test_deleting_one_raman_profile_leaves_the_wavelength_profile_and_slot_intact(self):
+        self._checkbox_for("cfg-raman").setChecked(True)
+
+        with patch(
+            "src.ui.menu.configuration_manager_dialog.QMessageBox.information",
+            return_value=None,
+        ):
+            self.dialog._confirm = lambda message: True
+            self.dialog._on_delete_clicked()
+
+        self.assertEqual(self.catalog.deleted_profiles, ["calprof-raman-532"])
+        self.assertEqual(self.catalog.deleted_slots, [])
+        self.assertEqual(self.catalog.deleted_versions, [])
+
+    def test_axis_column_distinguishes_wavelength_and_raman_profiles(self):
+        axis_column = self.dialog._COLUMNS.index("Axis")
+        texts = {
+            self.dialog.table.item(row, axis_column).text()
+            for row in range(self.dialog.table.rowCount())
+        }
+        self.assertEqual(texts, {"Wavelength", "Raman shift @ 532.000 nm"})
+
+
+class _ProfileWithArchivedLoadedVersionCatalog(_MultiProfileCatalog):
+    """Like _MultiProfileCatalog, but the Raman profile has a second
+    (archived) version too -- e.g. one applied remotely via the API while a
+    newer calibration became active locally. delete_profile() removes both."""
+
+    def delete_profile(self, calibration_profile_id):
+        self.deleted_profiles.append(calibration_profile_id)
+        return {
+            "calibration_profile_id": calibration_profile_id,
+            "deleted_configuration_ids": ["cfg-raman", "cfg-raman-old"],
+            "deleted_files": [], "file_errors": [], "catalog_revision": 2,
+        }
+
+
+class ConfigurationManagerDeletionDetectsNonSelectedLoadedVersionTests(unittest.TestCase):
+    """Regression test: checking a profile's active row and deleting the whole
+    profile also removes every archived version under it. If one of those
+    archived versions is what the GUI session actually has loaded/positioned
+    (e.g. applied via the API), active_configuration_was_deleted must still be
+    set -- even though that version's id isn't the row the operator checked."""
+
+    def setUp(self):
+        self.app = QApplication.instance() or QApplication([])
+        self.catalog = _ProfileWithArchivedLoadedVersionCatalog()
+        self.dialog = ConfigurationManagerDialog(
+            self.catalog, positioned_configuration_id="cfg-raman-old", parent=None
+        )
+
+    def _checkbox_for(self, configuration_id):
+        for row, summary in enumerate(self.dialog._row_summaries):
+            if summary["configuration_id"] == configuration_id:
+                return self.dialog.table.cellWidget(row, 0).findChild(QCheckBox)
+        raise AssertionError(f"{configuration_id} not shown")
+
+    def test_deleting_the_active_row_flags_a_positioned_archived_sibling_as_deleted(self):
+        self._checkbox_for("cfg-raman").setChecked(True)
+
+        with patch(
+            "src.ui.menu.configuration_manager_dialog.QMessageBox.information",
+            return_value=None,
+        ):
+            self.dialog._confirm = lambda message: True
+            self.dialog._on_delete_clicked()
+
+        self.assertEqual(self.catalog.deleted_profiles, ["calprof-raman-532"])
         self.assertTrue(self.dialog.active_configuration_was_deleted)
 
 

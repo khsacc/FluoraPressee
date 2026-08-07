@@ -8,4 +8,5 @@
 /*.json
 /config/
 ShamrockCIF.dll
+.DS_Store
 /offline_packages/

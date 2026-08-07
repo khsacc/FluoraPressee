@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "standard_id": "Polystyrene-NMIJ",
+  "display_name": "Polystyrene (NMIJ RM 8158-a)",
+  "quantity": "raman_shift_cm1",
+  "source_url": "https://doi.org/10.2116/analsci.21P054",
+  "catalogue_metadata": {
+    "citation": "Itoh, N., Hanari, N. Development of a Polystyrene Reference Material for Raman Spectrometer (NMIJ RM 8158-a). Anal. Sci. 37, 1533-1539 (2021). Table 5, 'Reference values and their expanded uncertainties'.",
+    "note": "uncertainty_cm1 stores the reported expanded uncertainty U at coverage factor k=2 (approximately 95% confidence), unlike the plain standard deviations used for the ASTM catalogues."
+  },
+  "lines": [
+    {"line_id": "Polystyrene-NMIJ:A", "raman_shift_cm1": 620.7, "species": "Polystyrene A", "uncertainty_cm1": 1.2},
+    {"line_id": "Polystyrene-NMIJ:B", "raman_shift_cm1": 795.1, "species": "Polystyrene B", "uncertainty_cm1": 1.2},
+    {"line_id": "Polystyrene-NMIJ:C", "raman_shift_cm1": 1001.2, "species": "Polystyrene C", "uncertainty_cm1": 1.2},
+    {"line_id": "Polystyrene-NMIJ:D", "raman_shift_cm1": 1031.5, "species": "Polystyrene D", "uncertainty_cm1": 1.2},
+    {"line_id": "Polystyrene-NMIJ:E", "raman_shift_cm1": 1154.9, "species": "Polystyrene E", "uncertainty_cm1": 1.2},
+    {"line_id": "Polystyrene-NMIJ:F", "raman_shift_cm1": 1448.4, "species": "Polystyrene F", "uncertainty_cm1": 1.2},
+    {"line_id": "Polystyrene-NMIJ:G", "raman_shift_cm1": 1582.7, "species": "Polystyrene G", "uncertainty_cm1": 1.2},
+    {"line_id": "Polystyrene-NMIJ:H", "raman_shift_cm1": 1602.1, "species": "Polystyrene H", "uncertainty_cm1": 1.2},
+    {"line_id": "Polystyrene-NMIJ:I", "raman_shift_cm1": 2851.0, "species": "Polystyrene I", "uncertainty_cm1": 1.1},
+    {"line_id": "Polystyrene-NMIJ:J", "raman_shift_cm1": 2906.2, "species": "Polystyrene J", "uncertainty_cm1": 1.2},
+    {"line_id": "Polystyrene-NMIJ:K", "raman_shift_cm1": 3055.1, "species": "Polystyrene K", "uncertainty_cm1": 1.1}
+  ]
+}

@@ -1,5 +1,7 @@
 # FluoRaPressée: Spectroscopic measurements and analysis platform designed for efficient high-pressure experiments
 
+<img src="./logo/Large_logo.jpg" width="50%">
+
 This program is designed to
 - control spectrometers and cameras, and acquire spectroscopic data
 - instantly fit the data

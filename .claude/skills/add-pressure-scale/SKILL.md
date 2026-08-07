@@ -1,6 +1,6 @@
 ---
 name: add-pressure-scale
-description: Use when adding a new pressure calibration scale (or a new sensor material/line) to FluoRaPressée's PressureCalculator — e.g. "add the XYZ 2024 ruby scale", "add a new temperature-correction scale for zircon", "add support for a new pressure sensor". Covers what must change in src/core/pressureCalc.py, what does NOT need to change (UI, API, file I/O are all data-driven), the temperature-mode gotchas, the required docs-site/docs/pressure-calculation/ page update (the sole place citations now live), and how to verify without an automated test suite.
+description: Use when adding a new pressure calibration scale (or a new sensor material/line) to FluoRaPressée's PressureCalculator — e.g. "add the XYZ 2024 ruby scale", "add a new temperature-correction scale for zircon", "add support for a new pressure sensor". Covers what must change in src/core/pressureCalc.py, what does NOT need to change (UI, API, file I/O are all data-driven), the temperature-mode gotchas, the required docs-site/docs/usage/pressure-calculation/ page update (the sole place citations now live), and how to verify without an automated test suite.
 ---
 
 # Adding a pressure scale to PressureCalculator
@@ -11,11 +11,11 @@ Everything else that touches pressure calculation — `src/ui/pressureCalc_ui.py
 (saving results) — reads the `SENSORS` / `PRESSURE_SCALES` / `TEMPERATURE_SCALES` dicts generically (combo
 boxes populated from the dicts; API `sensor`/`pressure_scale`/`scale` fields are plain `str` passed
 straight through). **In the common case, the only code file to edit is `src/core/pressureCalc.py`** — but
-the change isn't done until the scale's citation is documented on its `docs-site/docs/pressure-calculation/`
+the change isn't done until the scale's citation is documented on its `docs-site/docs/usage/pressure-calculation/`
 page too (step 4 below), since that's the only place citations live. `PRESSURE_SCALES`/`TEMPERATURE_SCALES`
 in code carry no citation info themselves — a key with no docs-site entry is a scale nobody can trace back
 to its source paper. (`README_ja.md`'s pressure-calculator section used to hold this citation list; it was
-migrated out to `docs-site/docs/pressure-calculation/` and now just shows a screenshot — don't add scale
+migrated out to `docs-site/docs/usage/pressure-calculation/` and now just shows a screenshot — don't add scale
 citations there.) Don't touch the UI or API layers unless you're doing something the checklist below calls
 out explicitly.
 
@@ -121,7 +121,7 @@ that sensor can be combined with any temperature scale for that sensor; they're 
 
 ### 4. Document it on the sensor's docs-site page (required, not optional)
 
-Every sensor has its own manual page under `docs-site/docs/pressure-calculation/`: `ruby.md`,
+Every sensor has its own manual page under `docs-site/docs/usage/pressure-calculation/`: `ruby.md`,
 `sm-srb4o7.md`, `sm-srfcl.md`, `diamond-13c.md`, `diamond-raman-edge.md`, `cubic-bn.md`, `zircon.md`,
 `quartz-464.md`, `quartz-128.md`. These pages — not `README_ja.md` — are the only place in the repo that
 records *which paper* each scale key implements. Treat updating the relevant page as part of the change,
@@ -153,7 +153,7 @@ Match the existing per-sensor page structure exactly (compare `ruby.md`, `sm-srb
   another scale, a recommended peak count, an unimplemented range check, etc.) — see existing pages for
   the level of detail expected. Not every scale needs one.
 
-Then update `docs-site/docs/pressure-calculation/index.md`'s **センサー一覧** table: bump the `圧力スケール数`
+Then update `docs-site/docs/usage/pressure-calculation/index.md`'s **センサー一覧** table: bump the `圧力スケール数`
 column for the sensor's row (and the `温度補正` column's parenthetical count, e.g. `任意（5スケールから選択）`,
 if you added a `TEMPERATURE_SCALES` entry).
 
@@ -199,14 +199,14 @@ sm_srb4o7→1, else unchanged) so selecting the sensor nudges the fit-peak-count
 without it the user's current peak-count setting is left alone.
 
 Step 4's docs-site update means **creating a new page**, not editing an existing one:
-1. `docs-site/docs/pressure-calculation/<kebab-case-sensor>.md` — copy the structure of an existing page
+1. `docs-site/docs/usage/pressure-calculation/<kebab-case-sensor>.md` — copy the structure of an existing page
    of the same `kind` (`ruby.md`/`sm-srb4o7.md`/`sm-srfcl.md` for `fluorescence`; `diamond-13c.md`/
    `cubic-bn.md`/`zircon.md`/`quartz-464.md`/`quartz-128.md` for `raman`). Frontmatter needs
-   `sidebar_position` (check `grep -m1 "^sidebar_position:" docs-site/docs/pressure-calculation/*.md`
+   `sidebar_position` (check `grep -m1 "^sidebar_position:" docs-site/docs/usage/pressure-calculation/*.md`
    first and pick the next free integer — positions don't need to be contiguous), `title`, `description`.
    Body: `種類`/`横軸単位`/`ゼロ圧ピーク位置の初期値` bullets, then `## 圧力スケール（N種類...)`,
    `## 温度シフト補正スケール`, `## 注意点` exactly as described in Case A step 4.
-2. `docs-site/docs/pressure-calculation/index.md` — add the sensor to the right bullet under
+2. `docs-site/docs/usage/pressure-calculation/index.md` — add the sensor to the right bullet under
    **センサーの種類と対応する横軸** (`蛍光センサー` vs `Ramanセンサー`, matching `SENSORS[...]["kind"]`),
    and add a new row to the **センサー一覧** table.
 3. No `_category_.json` change — the `pressure-calculation/` category's own sidebar position is already

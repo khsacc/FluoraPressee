@@ -41,6 +41,7 @@ const config: Config = {
       'classic',
       {
         docs: {
+          routeBasePath: '/',
           sidebarPath: './sidebars.ts',
           editUrl:
             'https://github.com/khsacc/FluoRaPressee/edit/main/docs-site/',
@@ -72,12 +73,12 @@ const config: Config = {
     navbar: {
       title: 'FluoRaPressée Manual',
       items: [
-        {
-          type: 'docSidebar',
-          sidebarId: 'tutorialSidebar',
-          position: 'left',
-          label: 'マニュアル',
-        },
+        // {
+        //   type: 'docSidebar',
+        //   sidebarId: 'tutorialSidebar',
+        //   position: 'left',
+        //   label: 'マニュアル',
+        // },
         {
           href: 'https://github.com/khsacc/FluoRaPressee',
           label: 'GitHub',
@@ -93,7 +94,7 @@ const config: Config = {
           items: [
             {
               label: 'マニュアル',
-              to: '/docs/',
+              to: '/',
             },
           ],
         },

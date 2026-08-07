@@ -24,9 +24,11 @@ from src.api.schemas import (
     StatusResponse,
 )
 from src.core.configuration_catalog import (
+    AmbiguousConfigurationProfileError,
     ConfigurationCompatibilityError,
     ConfigurationError,
 )
+from src.core.pressureCalc import PressureCalculator
 from src.ui.ui_mixins.api_mixin import BackgroundMismatchError, ExposureApplyError
 
 
@@ -40,7 +42,7 @@ def _jsonify(obj):
     DataAnalyzer.fit_spectrum() and PressureCalculator.calculate() return
     numpy.float64 scalars (from curve_fit/formulas) and, for double-peak fits,
     numpy.ndarray curves (y_fit1/y_fit2) - none of which Pydantic/FastAPI's
-    JSON encoder can serialize directly.
+    JSON encoder can serialise directly.
     """
     if isinstance(obj, np.ndarray):
         return obj.tolist()
@@ -221,6 +223,14 @@ def create_app(gui_window, gui_bridge) -> FastAPI:
                     "reasons": e.reasons,
                 },
             )
+        except AmbiguousConfigurationProfileError as e:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "ambiguous_configuration_profile",
+                    "message": str(e),
+                },
+            )
         except ConfigurationError as e:
             raise HTTPException(status_code=404, detail=str(e))
 
@@ -268,10 +278,20 @@ def create_app(gui_window, gui_bridge) -> FastAPI:
         "/calibration", response_model=CalibrationResponse, deprecated=True
     )
     def post_calibration(req: CalibrationRequest):
-        return gui_bridge.call(lambda: gui_window.api_apply_calibration(
-            req.c0, req.c1, req.c2, req.unit,
-            laser_wavelength_nm=req.laser_wavelength_nm, label=req.label,
-        ))
+        try:
+            return gui_bridge.call(lambda: gui_window.api_apply_calibration(
+                req.c0, req.c1, req.c2, req.unit,
+                laser_wavelength_nm=req.laser_wavelength_nm, label=req.label,
+            ))
+        except ConfigurationCompatibilityError as e:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "configuration_incompatible",
+                    "message": "Calibration is incompatible with the current excitation wavelength.",
+                    "reasons": e.reasons,
+                },
+            )
 
     @router.post("/acquire", response_model=AcquireResponse)
     def post_acquire(req: AcquireRequest):
@@ -293,6 +313,20 @@ def create_app(gui_window, gui_bridge) -> FastAPI:
             raise HTTPException(
                 status_code=400,
                 detail="Pressure calculation requires a calibrated axis.",
+            )
+        # axis_mode=="calibrated" only means *some* calibration is active; it does not
+        # guarantee its unit matches the requested sensor (e.g. a Wavelength calibration
+        # active while a Raman-shift sensor is requested), which would otherwise still
+        # produce a number by feeding an nm peak position into a cm-1 formula.
+        sensor_unit = PressureCalculator.SENSORS.get(req.sensor, {}).get("unit")
+        axis_unit = result.get("x_axis", {}).get("unit")
+        if sensor_unit is not None and axis_unit is not None and sensor_unit != axis_unit:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Sensor {req.sensor!r} expects a {sensor_unit} axis, but the "
+                    f"active calibration's axis is {axis_unit}."
+                ),
             )
         fit_payload = _fit_payload(req, result)
         payload["fit"] = fit_payload

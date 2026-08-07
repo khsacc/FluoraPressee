@@ -63,7 +63,7 @@ class ConfigurationBrowserDialog(QDialog):
 
         self.table = QTableWidget(0, 6)
         self.table.setHorizontalHeaderLabels(
-            ["Select", "Grating", "Centre (nm)", "ROI", "Calibration", "Created"]
+            ["Select", "Grating", "Centre (nm)", "ROI", "Axis", "Created"]
         )
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -107,6 +107,19 @@ class ConfigurationBrowserDialog(QDialog):
             return parsed.astimezone().strftime("%Y-%m-%d %H:%M")
         except (TypeError, ValueError):
             return str(value)
+
+    @staticmethod
+    def _axis_text(summary):
+        """Distinguish Wavelength from Raman-shift-at-a-given-laser (and
+        different lasers from each other) so an operator can tell two
+        calibration profiles at the same physical slot apart before loading."""
+        axis_kind = summary.get("axis_kind")
+        if axis_kind == "raman_shift":
+            excitation = summary.get("excitation_wavelength_nm")
+            return f"Raman shift @ {excitation:.3f} nm" if excitation else "Raman shift"
+        if axis_kind == "wavelength":
+            return "Wavelength"
+        return summary.get("calibration", {}).get("unit") or "—"
 
     def refresh(self):
         result = self.catalog.list_selectable(
@@ -153,7 +166,7 @@ class ConfigurationBrowserDialog(QDialog):
                 f"{grating['grooves_per_mm']} g/mm (slot {grating['index']})",
                 f"{summary['center_wavelength_nm']:.3f}",
                 self._roi_text(summary["roi"]),
-                summary["calibration"]["unit"],
+                self._axis_text(summary),
                 self._created_text(summary["created_at"]),
             ]
             for column, value in enumerate(values, start=1):

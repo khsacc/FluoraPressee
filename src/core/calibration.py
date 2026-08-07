@@ -19,6 +19,12 @@ class CalibrationCore:
             return 0.0
         return (1e7 / laser_wl) - (1e7 / wl_nm)
 
+    @staticmethod
+    def raman_to_nm(shift_cm1: float, laser_wl: float) -> float:
+        """Raman shift (cm^-1) to wavelength (nm) for a given excitation wavelength."""
+        denominator = (1e7 / laser_wl) - shift_cm1
+        return 1e7 / denominator if denominator != 0 else float("nan")
+
     def gaussian(self, x: np.ndarray, a: float, x0: float, sigma: float, offset: float) -> np.ndarray:
         return a * np.exp(-(x - x0)**2 / (2 * sigma**2)) + offset
 

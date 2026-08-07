@@ -18,13 +18,14 @@ description: 取得したデータにピークフィッティングを追加す�
   "fit_range": {"start": 690.0, "end": 700.0}
 }
 ```
-- `fit_function`: `"Gauss"`, `"Lorentz"`, `"Pseudo Voigt"`, `"Moffat"`,
-  `"Diamond Raman Edge"` のいずれか。Diamond Raman Edge は負の一次微分を
-  pseudo-Voigt＋線形背景でフィットし、`fit_peak_count` は必ず `1` にします。
-- `fit_peak_count`: フィットするピーク数。1～5、既定値は2。
+- `fit_function`: `"Gauss"`, `"Lorentz"`, `"Pseudo Voigt"`, `"Moffat"`, `"Diamond Raman Edge"` のいずれか。
+  Diamond Raman Edge は負の一次微分をpseudo-Voigt＋線形背景でフィットし、`fit_peak_count` は必ず `1` にします。
+- `fit_peak_count`: フィットするピーク数。
+  1～5、既定値は2。
 - `peak_sort_order`: `"x_desc"`, `"x_asc"`, `"intensity_desc"`, `"intensity_asc"` のいずれか。
 - `baseline_model`: `"constant"`, `"linear"`, `"quadratic"`, `"auto_polynomial"` のいずれか。
-  省略時は `"constant"`。`auto_polynomial` はBICを用いて0～2次から保守的に選択します。
+  省略時は `"constant"`。
+  `auto_polynomial` はBICを用いて0～2次から保守的に選択します。
 - `fit_range` は省略可（省略時は取得データ全域でフィット）。
 - 2Dイメージモードで取得した場合、フィットは意味を持たないため `400 Bad Request` を返します。
 
@@ -48,8 +49,7 @@ description: 取得したデータにピークフィッティングを追加す�
     }
 }
 ```
-フィットが失敗した場合(データ点不足・範囲外など)は `"success": false`, `"fit": null` になります
-(HTTPステータスは200のまま — フィット失敗は取得自体の失敗ではないため)。
+フィットが失敗した場合(データ点不足・範囲外など)は `"success": false`, `"fit": null` になります(HTTPステータスは200のまま — フィット失敗は取得自体の失敗ではないため)。
 
 ## 関連エンドポイント
 

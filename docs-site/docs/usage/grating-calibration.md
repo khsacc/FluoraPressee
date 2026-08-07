@@ -1,0 +1,113 @@
+---
+sidebar_position: 3
+title: 回折格子制御・横軸較正
+description: 回折格子・中心波長の制御と、横軸較正の流れ
+---
+
+# 回折格子制御・横軸較正
+
+メイン画面の **Spectrometer Configurations** パネルは、回折格子・中心波長という分光器の物理的な位置の制御と、その位置における横軸較正（pixel → 波長 / Raman shift の対応付け）の両方をまとめて扱います。
+分光器の位置が変わると、その位置で取得した較正はもう成り立たないため、この2つは常にセットで管理されます。
+
+## 回折格子・中心波長の制御
+
+<img src={require('@site/static/img/usage_configuration.jpg').default} style={{maxWidth: '480px'}} />
+
+
+- **Grating (grooves/mm)**: 使用する回折格子。
+  表示はgrooves/mm値ですが、実際に分光器へ送られるのは[Hardware Configurationのgrating一覧](menu/hardware/hardware-configuration.md)で定義した物理タレット番号です。
+- **Wavelength / Raman shift**: 横軸モードの切り替え。
+  **Centre** の意味そのものが切り替わります（下記）。
+- **Centre (nm)** / **Centre (cm⁻¹)**: 目標とする分光器中心位置。
+  ラベルと単位は上のラジオボタンに従って変わります。
+- **Excitation wavelength (nm)**: 励起波長。
+  **Raman shift** モードのときだけ編集可能になります。
+- **Apply**: 上記の設定で実際に分光器を動かします。
+
+**Raman shift** モードでは、**Centre** に入力した値はRaman shiftそのものであり、実際に分光器へ指令される中心波長 $\lambda$ は、励起波長 $\lambda_L$ とRaman shift $\tilde\nu$ から
+
+$$
+\lambda = \frac{1}{\dfrac{1}{\lambda_L} - \dfrac{\tilde\nu}{10^7}}
+$$
+
+として逆算されます（$\lambda$、$\lambda_L$ の単位はnm、$\tilde\nu$ の単位はcm<sup>-1</sup>）。
+励起波長を変更すると、表示中のRaman shift値を保ったまま、この逆算に使う中心波長だけが再計算されます。
+Raman shiftが励起波長の波数以上になる（$\lambda$ が発散・負になる）組み合わせは無効な状態として扱われ、**Apply** が無効化されます。
+
+**Apply** は、選択中のgrating・Centre値が現在の物理位置と一致している間は無効化されており、どちらかを変更すると有効になります。
+押すと、まずgratingの切り替え、続いて中心波長の移動が順番に行われ、完了するまでモーダルダイアログ「Spectrometer is moving」が表示されてUI全体が操作不能になります。
+**Cancel** ボタンは、移動を中断する機能（MONO-STOP相当）を持つ機種（Princeton Instruments のシリアル接続）でのみ、かつ中心波長移動フェーズに入ってから表示されます（grating切り替え自体には中断の仕組みがありません）。
+移動が中断・失敗した場合は、実際にハードウェアから読み戻した位置がGUIに反映されます。
+
+移動が完了すると、その時点の物理的なgrating・中心波長が新しい基準として記録され、それまで有効だった横軸較正は自動的に失効します（以前の物理位置でしか成り立たない較正のため）。
+一方、ROIはこの操作では一切変更されません（ROIはROI欄の直接編集、または後述する保存済みConfigurationの読み込みでのみ変わります）。
+
+Ocean Optics接続時は、物理的に可動な中心波長を持たないため、この節の内容（gratingの選択・**Apply** による移動）は実質的に意味を持ちません。
+代わりに機器自身が持つ工場較正済みの波長軸が、横軸較正が無い間の既定の横軸として使われます。
+
+## 横軸較正
+
+横軸較正は、以下のいずれかの方法で有効になります。
+
+1. **Calibrate x-axis** ボタンから較正ウィンドウを開き、基準ピークを使って新規に較正する。
+2. **Load previous configuration** ボタンから、grating・中心波長・ROIとともに以前保存した較正をまとめて読み込む。
+
+### 新規較正（Calibrate x-axis）
+
+**Calibrate x-axis** を押すと較正ウィンドウ（Wavelength Calibration）が開きます。
+連続測定中であれば一旦停止し、他の取得処理と排他的に実行されます（他の処理が取得中の場合は「Busy」警告が表示されます）。
+ウィンドウを閉じると、元の測定状態（動いていれば再開）に戻ります。
+
+1. **較正対象のスペクトルを用意する**: **Acquire a spectrum**（このウィンドウ独自の **Acquisition time (s)** で1回取得）、または **Use displayed data**（メイン画面の1Dプロットに現在表示されているスペクトルをそのまま使用。
+   バックグラウンド差し引きやFlip Xも反映済み）のいずれかを使います。
+2. **ピークを検出する**: **Find peaks**（スペクトル取得後は自動実行）を押すと、中央値以下のデータ点のばらつきからノイズレベルを推定し、**Threshold** スライダーの倍率（既定 ×7.5、×1.0〜×50.0）をかけたprominence / height条件でピークを検出したうえで、各ピークの前後10 pixelをGaussianフィットしてサブピクセル精度の中心位置を求めます。
+   検出されたピークはプロット上にオレンジの目盛りとして、また画面下部にピークごとの拡大フィットプレビューとして表示されます。
+3. **基準となる標準を選ぶ**: **Emission / Raman shift standards** のチェックリストで、比較に使う輝線・Raman標準を選びます（既定でNe Iのみチェック）。
+   Ar I、Hg I、および`calibrationStandards/` に追加したカタログもここに現れます。
+   cyclohexaneやpolystyreneのようなRaman shift較正専用の標準物質は、そのシフト値に対応する波長が励起波長に依存するため、**Raman shift (cm⁻¹)** を選んでいる間だけリストに表示されます（**Wavelength** に切り替えても選択状態自体は内部的に保持されます）。
+4. **検出ピークと基準線を対応付ける**: 検出ピーク（目盛り・テーブル行・フィットプレビューのいずれか）を選択してから、対応する文献値の目盛りをクリックすると手動で割り当てられます。
+   あるいは**Find assignments** で、ピークと基準線のペアから作れる単調増加・単調減少な変換の候補を複数算出し（分光器メーカー提供のおおよその波長軸や、現在の指令中心波長との整合性も、候補の絞り込み・順位付けに補助的に使われます）、一致数とRMS残差付きで一覧表示します。
+   **Apply candidate** で選択中の候補を適用します（すでに手動で確定した割り当ては上書きされません）。
+   **Clear assignment**で個別の割り当てを解除できます。
+5. **較正する**: 割り当てがちょうど2点の場合は線形フィット（$y = c_0 + c_1 x$）、3点以上の場合は2次フィット（$y = c_0 + c_1 x + c_2 x^2$）で、pixel位置 $x$ を波長またはRaman shift $y$ へ変換する係数$c_0, c_1, c_2$ が求まります。
+   結果は各割り当て点での残差Δとともにその場に表示されます。
+6. **Save and apply**: 現在のgrating・中心波長・ROIの組（slot）に対する新しい不変の[Configurationレコード](../data-formats/configuration.md)を登録し、直後にそれをメイン画面の有効な横軸較正として適用します（Flip Xが有効な場合でも、係数は反転前の生pixel domainで保存されます）。
+   適用後は横軸ラベル・フィット範囲・**Loaded:** 表示が更新され、ダイアログが閉じます。
+
+:::note
+Raman shiftモードの際、較正情報を波長空間で保存するか、Raman shift空間のまま保存するかは、分光ソフトウェアごとに分かれるところです。
+励起波長の信頼性が非常に高いArイオンレーザー等を用いる場合、波長空間で保存しても問題ない可能性が高く、分光器の挙動も正確に表現できる可能性がありますが、ナフタレンやポリスチレンなど、Raman shiftの標準物質を用いて較正する場合、一次情報として得られるのはRaman shiftであるため、Raman shift空間で較正することにも一定の正当性があります。
+
+FluoRaPresséeは、横軸が波長の時はピクセル数と波長の関係を、横軸がRaman shiftの場合はピクセル数とRaman shiftの関係をそれぞれ多項式でフィットする仕様を採用しています。
+したがって、かりに中心波長が全く同一だったとしても、横軸の単位を変更した際には、較正ファイルも変更する必要があります。
+1000 cm<sup>-1</sup>程度の幅の領域であれば、波長を経由せずピクセル－Raman shift関係を多項式フィットしても、通常の分光器で問題になることは少ないと考えられます。
+ただし、非常に幅広い波長領域をRaman shiftモードで測定する場合には、較正に用いていないピークの位置などから、較正関係に不自然な挙動が生じていないかを確かめるほうが良いです。
+:::
+
+
+
+
+### 保存済みConfigurationからの読み込み
+
+**Load previous configuration** は、grating・中心波長・ROI・横軸較正をひとまとめにした[Configurationレコード](../data-formats/configuration.md)を選んで読み込みます。
+現在接続中の機種と互換性がある候補だけが一覧されます。
+選択すると、必要であれば分光器を保存されていた位置へ移動したうえで、保存されていた較正が適用されます（すでに同じ物理位置にいる場合は移動自体が省略されます。
+Ocean Optics接続時は中心波長の移動自体が存在しないため常に省略されます）。
+保存されていた較正が**Raman shift** で、かつそのときの励起波長が現在のExcitation wavelength設定と一致しない場合は、読み込み自体がエラーになり、GUIの状態は変更されません。
+
+![](../../static/img/usage_grating-calibration_load_previous_configuration.jpg)
+
+読み込んだConfigurationの一覧・削除は **Load previous configuration** とは別に[Manage Configuration Files](menu/hardware/manage-configuration-files.md)からも行えます。
+Configurationレコードのファイル形式・バージョン管理の詳細は[Configurationファイル](../data-formats/configuration.md)を参照してください。
+
+
+### 較正が無効になる条件
+
+以下のいずれかが起きると、横軸較正は自動的に失効し、横軸はpixel表示に戻ります。
+
+- **回折格子・中心波長の制御**の**Apply**でgrating・中心波長を移動したとき（前節の通り、常に失効します。
+  ROIは変わらないままです）。
+- 横軸較正が有効な状態で **Wavelength ⇔ Raman shift** を切り替えたとき（較正の単位と表示が食い違うため）。
+- **Raman shift** モードの横軸較正が有効な状態で、**Excitation wavelength** を較正時の値と0.001 nm精度で一致しなくなるまで変更したとき。
+
+後者2つの場合はgrating・中心波長・ROI自体は動いていないため、**Loaded:** 表示は消去されず「(calibration invalidated: 理由)」という注記が追加された状態で残ります。

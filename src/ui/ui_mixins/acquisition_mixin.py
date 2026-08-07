@@ -48,35 +48,16 @@ class AcquisitionMixin:
     def get_x_axis(self, num_pixels):
         x = np.arange(num_pixels)
         if self.calib_coeffs is not None:
+            # calib_unit always matches the current Wavelength/Raman display by
+            # construction: the display toggle and excitation-wavelength edits
+            # invalidate the calibration the moment either would disagree with it
+            # (deactivate_axis_calibration(), spectrometer_control_mixin.py), and a
+            # configuration load rejects a laser mismatch before ever reaching this
+            # state (_prepare_configuration_for_loading(), file_io_mixin.py). So there
+            # is never a unit to convert here -- doing so implicitly used to paper
+            # over exactly the mismatches those two now prevent.
             c0, c1, c2 = self.calib_coeffs
-            poly = c0 + c1 * x + c2 * x**2  # units: nm or cm⁻¹ depending on calib_unit
-
-            calib_is_raman = getattr(self, 'calib_unit', 'Wavelength') == 'Raman shift'
-            display_is_raman = self.radio_spec_mode_raman.isChecked()
-
-            if calib_is_raman == display_is_raman:
-                return poly  # same units, no conversion needed
-
-            laser_wl = getattr(self, 'calib_laser_wl', None) or self.spin_exc_wl.value()
-
-            if not calib_is_raman and display_is_raman:
-                # poly is nm → convert to Raman shift (cm⁻¹)
-                # Raman shift of 0 is physically valid (laser line); negative is anti-Stokes.
-                # Only nan/inf (from poly ≤ 0, i.e. invalid nm) need masking.
-                if laser_wl > 0:
-                    with np.errstate(divide='ignore', invalid='ignore'):
-                        rs = 1e7 / laser_wl - 1e7 / poly
-                    return np.where(np.isfinite(rs), rs, np.nan)
-                return poly
-            else:
-                # poly is Raman shift (cm⁻¹) → convert to nm
-                # wavelength must be positive; nan for out-of-range pixels
-                if laser_wl > 0:
-                    with np.errstate(divide='ignore', invalid='ignore'):
-                        denom = 1e7 / laser_wl - poly
-                        wl = np.where(denom != 0, 1e7 / denom, np.nan)
-                    return np.where(wl > 0, wl, np.nan)
-                return poly
+            return c0 + c1 * x + c2 * x**2
 
         native_wavelengths = getattr(self.thread, "native_wavelengths", None)
         if native_wavelengths is not None and len(native_wavelengths) == num_pixels:

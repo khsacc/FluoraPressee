@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "standard_id": "ASTM-Cyclohexane",
+  "display_name": "Cyclohexane (ASTM)",
+  "quantity": "raman_shift_cm1",
+  "source_url": "https://doi.org/10.1002/9780470027325.s0705",
+  "catalogue_metadata": {
+    "citation": "Carrabba, M.M. (2006). Wavenumber Standards for Raman Spectrometry. In Handbook of Vibrational Spectroscopy. John Wiley & Sons, Ltd. Table 3, 'ASTM / Cyclohexane' column.",
+    "note": "Values are the table's average Raman shift; uncertainty_cm1 stores the reported standard deviation, not an expanded/coverage-factor uncertainty."
+  },
+  "lines": [
+    {"raman_shift_cm1": 384.1, "species": "Cyclohexane", "uncertainty_cm1": 0.78},
+    {"raman_shift_cm1": 426.3, "species": "Cyclohexane", "uncertainty_cm1": 0.41},
+    {"raman_shift_cm1": 801.3, "species": "Cyclohexane", "uncertainty_cm1": 0.96},
+    {"raman_shift_cm1": 1028.3, "species": "Cyclohexane", "uncertainty_cm1": 0.45},
+    {"raman_shift_cm1": 1157.6, "species": "Cyclohexane", "uncertainty_cm1": 0.94},
+    {"raman_shift_cm1": 1266.4, "species": "Cyclohexane", "uncertainty_cm1": 0.58},
+    {"raman_shift_cm1": 1444.4, "species": "Cyclohexane", "uncertainty_cm1": 0.30},
+    {"raman_shift_cm1": 2664.4, "species": "Cyclohexane", "uncertainty_cm1": 0.42},
+    {"raman_shift_cm1": 2852.9, "species": "Cyclohexane", "uncertainty_cm1": 0.32},
+    {"raman_shift_cm1": 2923.8, "species": "Cyclohexane", "uncertainty_cm1": 0.36},
+    {"raman_shift_cm1": 2938.3, "species": "Cyclohexane", "uncertainty_cm1": 0.51}
+  ]
+}

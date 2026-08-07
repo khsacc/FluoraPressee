@@ -512,7 +512,14 @@ class ApiMixin:
 
     def api_resolve_configurations(self, slot_ids):
         hardware_context = self.gui_bridge.call(self.configuration_hardware_context)
-        return self.configuration_catalog.resolve_slots(slot_ids, hardware_context)
+        # Each entry is a bare slot_id string or a SlotResolutionRequest pydantic
+        # model (src/api/schemas.py) naming axis_kind/excitation explicitly;
+        # ConfigurationCatalog.resolve_slots() only knows str | dict.
+        normalized = [
+            entry if isinstance(entry, str) else entry.model_dump(exclude_none=True)
+            for entry in slot_ids
+        ]
+        return self.configuration_catalog.resolve_slots(normalized, hardware_context)
 
     def api_apply_configuration(self, configuration_id, axis_mode="calibrated"):
         record = self._api_validate_configuration(configuration_id)

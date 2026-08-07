@@ -1,0 +1,8 @@
+{
+  "label": "圧力計算",
+  "position": 5,
+  "link": {
+    "type": "doc",
+    "id": "usage/pressure-calculation/index"
+  }
+}

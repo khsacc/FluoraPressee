@@ -8,7 +8,7 @@ description: カメラ・分光器の識別情報とライブ状態照会 (GET /
 
 ## GET /hardware/camera
 
-カメラの識別情報、センサー寸法、露光時間、ROI、binning、温度などを返します。
+カメラの識別情報、圧力マーカー寸法、露光時間、ROI、binning、温度などを返します。
 
 - `refresh=false`（既定）: カメラスレッドが保持しているキャッシュだけを読み、SDK呼び出しを行いません。
 - `refresh=true`: カメラスレッドへライブ状態照会を依頼し、共通形式の `status` を追加します。
@@ -57,14 +57,14 @@ description: カメラ・分光器の識別情報とライブ状態照会 (GET /
 }
 ```
 
-`mode` は `hardware` または `debug`。`operational` はデバッグバックエンドを含めてAPIから
-利用可能か、`hardware_connected` は物理デバイスに接続されているかを表します。debugモードでは
-`operational: true`, `hardware_connected: false` となります。
+`mode` は `hardware` または `debug`。
+`operational` はデバッグバックエンドを含めてAPIから利用可能か、`hardware_connected` は物理デバイスに接続されているかを表します。
+debugモードでは`operational: true`, `hardware_connected: false` となります。
 
 ## GET /hardware/spectrometer
 
-分光器の識別情報、中心波長、現在のグレーティングを返します。Andor/Princeton Instrumentsとも
-同じ公開形式で、通常は各コントローラの `get_cached_hardware_metadata()` の結果を利用します。
+分光器の識別情報、中心波長、現在のグレーティングを返します。
+Andor/Princeton Instrumentsとも同じ公開形式で、通常は各コントローラの `get_cached_hardware_metadata()` の結果を利用します。
 
 - `refresh=false`（既定）: DLL/RS-232通信なし。
 - `refresh=true`: `get_status_snapshot()` で実機を照会し、`status` を追加します。
@@ -91,9 +91,9 @@ description: カメラ・分光器の識別情報とライブ状態照会 (GET /
 }
 ```
 
-`refresh=true` の `status` は以下の共通形式です。取得できない機器固有項目は推測せず
-`state: "unsupported"` とします。一部項目だけ失敗した場合はその項目を `state: "error"` とし、
-他の取得結果は返します。
+`refresh=true` の `status` は以下の共通形式です。
+取得できない機器固有項目は推測せず`state: "unsupported"` とします。
+一部項目だけ失敗した場合はその項目を `state: "error"` とし、他の取得結果は返します。
 
 ```json
 {
@@ -115,5 +115,4 @@ description: カメラ・分光器の識別情報とライブ状態照会 (GET /
 }
 ```
 
-未接続はHTTP通信の失敗ではないため `200` を返し、`hardware_connected: false`、
-`status.available: false` で表現します。
+未接続はHTTP通信の失敗ではないため `200` を返し、`hardware_connected: false`、`status.available: false` で表現します。

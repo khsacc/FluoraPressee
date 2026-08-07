@@ -209,13 +209,20 @@ class DisplayMixin:
                     text += f"<b>R-value:</b><br> {res['R2']:.4f}</span>"
 
                     if self.pressure_window is not None and self.pressure_window.isVisible():
-                        self.pressure_window.set_fit_peaks(res["peaks"])
-                        p = self.pressure_window.current_pressure
-                        p_err = self.pressure_window.current_pressure_err
-                        if p is not None and p_err is not None:
-                            text += f"<br><br><span>Calculated Pressure:<br>{p:.3f} ± {p_err:.3f} GPa</span>"
+                        # A pixel axis has no Wavelength/Raman-shift value at all, so a
+                        # peak position fit against one must never reach the pressure
+                        # calculator as though it were a real physical unit.
+                        if public_axis_kind(self) == "pixel":
+                            self.pressure_window.set_fit_peaks([])
+                            text += "<br><br><span>Calculated Pressure:<br>No calibrated axis</span>"
                         else:
-                            text += "<br><br><span>Calculated Pressure:<br>Calc Error</span>"
+                            self.pressure_window.set_fit_peaks(res["peaks"])
+                            p = self.pressure_window.current_pressure
+                            p_err = self.pressure_window.current_pressure_err
+                            if p is not None and p_err is not None:
+                                text += f"<br><br><span>Calculated Pressure:<br>{p:.3f} ± {p_err:.3f} GPa</span>"
+                            else:
+                                text += "<br><br><span>Calculated Pressure:<br>Calc Error</span>"
 
 
 

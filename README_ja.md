@@ -1,5 +1,7 @@
 # FluoRaPressée: Spectrometer Control & Analysis GUI
 
+<img src="./logo/Large_logo.jpg" width="50%">
+
 * Author: Hiroki Kobayashi (Geochemical Research Center, The University of Tokyo). 
     * https://orcid.org/0000-0002-3682-7558 
     * E-mail as of 2026: hiroki (at) eqchem.s.u-tokyo.ac.jp
@@ -38,7 +40,7 @@
 3. ``spectrometerConfig.json``が存在しない状態でアプリを初めて起動すると、セットアップウィザードが自動的に開きます。
    装置メーカー・接続設定・回折格子構成などを入力すると、``spectrometerConfig.json``がプロジェクトルートに
    生成されます。ウィザードの各ステップおよび``spectrometerConfig.json``自体の詳しい仕様は
-   [オンラインマニュアルの「ハードウェア設定」](https://khsacc.github.io/FluoRaPressee/docs/hardware-config)
+   [オンラインマニュアルの「ハードウェア設定」](https://khsacc.github.io/FluoRaPressee/hardware-config)
    を参照してください。
 
 ##  使い方 
@@ -80,50 +82,6 @@ cd docs-site
 NODENV_VERSION=22.22.0 npm start
 ```
 
-## スクリーンショット
-
-
-### メイン画面
-
-![](docs-site/static/img/manual/MainWindowFull.jpg)
-
-* スペクトルの取得、保存
-    * 単発測定および連続測定
-    * インターバルを指定した連続保存・連続解析もできます。
-* 分光器の基本的な制御（回折格子の変更、中心位置の変更）
-* ROI の設定、イメージモード（CCDで取得した画像をそのまま出力）への切り替え
-* バックグラウンドの取得と差し引き
-* ピーク函数を用いたフィッティング
-* 圧力計算ウィンドウを開く
-
-
-
-### 横軸較正画面（「Calibrate x-axis」ボタンをクリックして開く）
-
-![](docs-site/static/img/manual/CalibrationWindow.png)
-
-* 標準試料のスペクトルを取得し、ピーク検索、Gaussian函数によるピークフィット、波長の較正までを行えます。
-
-
-### 横軸較正補助画面
-
-![](docs-site/static/img/manual/CalibrationHelperWindow.png)
-
-* よく使うネオンの波長領域のスペクトル（事前に測定してプログラム中に保存したもの）を表示してピークの帰属の参考にできます。
-
-
-### フィッティング
-
-* Pseudo-Voigt, Moffat, Gaussian, Lorenzian の4種類の関数に対応
-* ピーク数の最大は５まで。
-
-
-
-### 圧力計算画面（「Open pressure calculator」ボタンをクリックして開く）
-
-![](docs-site/static/img/manual/PressureCalculator.png)
-
-
 
 
 ## API機能（同一LAN内の他PCからの操作）
@@ -134,13 +92,13 @@ NODENV_VERSION=22.22.0 npm start
 起動している間、GUI側の測定・設定系操作はロックされ（プロットの表示設定等は引き続き操作可）、
 **Stop API Server** を押すとローカルでの操作権が戻ります。
 
-エンドポイント一覧・リクエスト/レスポンスの詳細は [オンラインマニュアルのAPIリファレンス](https://khsacc.github.io/FluoRaPressee/docs/api) を参照してください。
+エンドポイント一覧・リクエスト/レスポンスの詳細は [オンラインマニュアルのAPIリファレンス](https://khsacc.github.io/FluoRaPressee/api) を参照してください。
 
 ## 保存されるファイルの形式
 
 測定データ、バックグラウンド、フィッティング結果、連続測定のログ、Configuration（較正込みの装置設定）
 など、アプリが保存する各ファイルの形式については
-[オンラインマニュアルの「保存データの形式」](https://khsacc.github.io/FluoRaPressee/docs/data-formats)
+[オンラインマニュアルの「保存データの形式」](https://khsacc.github.io/FluoRaPressee/data-formats)
 を参照してください。
 
 ## 実機試験

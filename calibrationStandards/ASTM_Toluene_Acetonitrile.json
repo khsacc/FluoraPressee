@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "standard_id": "ASTM-Toluene-Acetonitrile",
+  "display_name": "Toluene–Acetonitrile (ASTM)",
+  "quantity": "raman_shift_cm1",
+  "source_url": "https://doi.org/10.1002/9780470027325.s0705",
+  "catalogue_metadata": {
+    "citation": "Carrabba, M.M. (2006). Wavenumber Standards for Raman Spectrometry. In Handbook of Vibrational Spectroscopy. John Wiley & Sons, Ltd. Table 3, 'ASTM / Toluene (T)-acetonitrile (A)' column.",
+    "note": "A single mixture standard whose lines come from two species (toluene and acetonitrile), used together for one calibration; species distinguishes which compound each line belongs to. uncertainty_cm1 stores the reported standard deviation, not an expanded/coverage-factor uncertainty."
+  },
+  "lines": [
+    {"raman_shift_cm1": 378.5, "species": "Acetonitrile", "uncertainty_cm1": 0.92},
+    {"raman_shift_cm1": 521.7, "species": "Toluene", "uncertainty_cm1": 0.34},
+    {"raman_shift_cm1": 786.5, "species": "Toluene", "uncertainty_cm1": 0.40},
+    {"raman_shift_cm1": 919.0, "species": "Acetonitrile", "uncertainty_cm1": 0.40},
+    {"raman_shift_cm1": 1003.6, "species": "Toluene", "uncertainty_cm1": 0.37},
+    {"raman_shift_cm1": 1030.6, "species": "Toluene", "uncertainty_cm1": 0.36},
+    {"raman_shift_cm1": 1211.4, "species": "Toluene", "uncertainty_cm1": 0.32},
+    {"raman_shift_cm1": 1605.1, "species": "Toluene", "uncertainty_cm1": 0.47},
+    {"raman_shift_cm1": 2253.7, "species": "Acetonitrile", "uncertainty_cm1": 0.42},
+    {"raman_shift_cm1": 2292.6, "species": "Acetonitrile", "uncertainty_cm1": 0.89},
+    {"raman_shift_cm1": 2940.8, "species": "Acetonitrile", "uncertainty_cm1": 0.25},
+    {"raman_shift_cm1": 3057.1, "species": "Toluene", "uncertainty_cm1": 0.63}
+  ]
+}

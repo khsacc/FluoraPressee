@@ -5,7 +5,9 @@ from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
 from src.ui.configuration_browser import ConfigurationBrowserDialog
 from src.core.configuration_catalog import (
+    ConfigurationCompatibilityError,
     ConfigurationError,
+    excitation_wavelength_key,
     format_configuration_label,
 )
 from src.core.measurement_metadata import background_mismatch_fields, build_hardware_metadata, public_axis_kind
@@ -77,10 +79,57 @@ class FileIOMixin:
         if not self.handle_bg_mismatch_and_run(self.start_sequential):
             self._release_acquisition_gate()
 
+    def _sync_display_mode_to_unit(self, unit, excitation_wavelength_nm):
+        """Force the Wavelength/Raman display toggle (and excitation wavelength,
+        for Raman shift) to agree with a calibration about to become active --
+        the one choke point that guarantees calib_unit can never disagree with
+        what on_spec_mode_changed()/on_exc_wl_changed()/public_axis_unit() read
+        off the display toggle, regardless of which caller is applying the
+        calibration (a loaded configuration, the Calibration window's own
+        independent unit radio button, or the deprecated inline API -- none of
+        which otherwise touch this toggle themselves). Signals are blocked so
+        this never re-triggers those handlers' own invalidation logic against
+        the calibration being applied right now; _sync_controls_to_display_mode()
+        (SpectrometerControlMixin) then applies the same displayed-centre-value/
+        spin_exc_wl-enabled/Pressure-Window-sensor side effects on_spec_mode_changed()
+        itself would, so the two paths can never drift apart.
+        """
+        self.radio_spec_mode_raman.blockSignals(True)
+        self.radio_spec_mode_wl.blockSignals(True)
+        if unit == "Raman shift":
+            if excitation_wavelength_nm is not None:
+                self.spin_exc_wl.setValue(float(excitation_wavelength_nm))
+            self.radio_spec_mode_raman.setChecked(True)
+        else:
+            self.radio_spec_mode_wl.setChecked(True)
+        self.radio_spec_mode_raman.blockSignals(False)
+        self.radio_spec_mode_wl.blockSignals(False)
+        self._sync_controls_to_display_mode()
+
     def apply_calibration(
         self, coeffs, label, calib_unit='Wavelength', calib_laser_wl=None,
         axis_source="loaded_configuration", configuration_id=None, slot_id=None,
     ):
+        # A loaded configuration already rejected a laser mismatch before ever
+        # reaching this point (_prepare_configuration_for_loading()), and the
+        # Calibration window's "Save and apply" reads calib_laser_wl directly
+        # from this same spinbox -- so both agree trivially. Only the
+        # deprecated inline API can reach apply_calibration() with a
+        # calib_laser_wl that disagrees with the operator's current excitation
+        # wavelength; without this check it would silently overwrite
+        # spin_exc_wl instead of erroring, exactly the "unit mismatch" this
+        # feature otherwise always rejects.
+        if calib_unit == "Raman shift" and calib_laser_wl is not None:
+            if excitation_wavelength_key(self.spin_exc_wl.value()) != excitation_wavelength_key(
+                calib_laser_wl
+            ):
+                raise ConfigurationCompatibilityError([
+                    "Excitation wavelength does not match: this calibration was "
+                    f"taken at {calib_laser_wl:.3f} nm, but the excitation "
+                    f"wavelength is currently set to {self.spin_exc_wl.value():.3f} nm. "
+                    "Set the excitation wavelength to the calibrated value first."
+                ])
+        self._sync_display_mode_to_unit(calib_unit, calib_laser_wl)
         self.calib_coeffs = coeffs
         self.calib_unit = calib_unit
         self.calib_laser_wl = calib_laser_wl
@@ -97,6 +146,25 @@ class FileIOMixin:
         if getattr(self, 'raw_1d_data', None) is not None and hasattr(self.thread, 'is_measuring') and not self.thread.is_measuring:
             self.update_display(is_new_data=False)
 
+    def _refresh_after_axis_change(self):
+        """Shared tail for every axis-invalidating state change: resync the fit
+        range, repaint the plot under the (now pixel) axis if there's live
+        data to repaint, and drop any peak/pressure the Pressure Window is
+        still showing under the calibration that just stopped being active.
+        Without this, a caller that only updates calib_coeffs/labels can leave
+        stale calibrated x-values and a stale pressure figure on screen even
+        though the underlying state has already fallen back to pixel.
+        """
+        self.sync_fit_range_to_spectrum(force=True)
+        if (
+            getattr(self, 'raw_1d_data', None) is not None
+            and hasattr(self.thread, 'is_measuring')
+            and not self.thread.is_measuring
+        ):
+            self.update_display(is_new_data=False)
+        if getattr(self, 'pressure_window', None) is not None:
+            self.pressure_window.set_fit_peaks([])
+
     def clear_active_configuration(self):
         self.calib_coeffs = None
         self.axis_source = "pixel"
@@ -109,6 +177,27 @@ class FileIOMixin:
         self.positioned_configuration_slot_id = None
         self.lbl_loaded_configuration.setText("Loaded: None")
         self.update_plot_labels()
+        self._refresh_after_axis_change()
+
+    def deactivate_axis_calibration(self, reason):
+        """Invalidate the active calibration without disturbing physical-position
+        bookkeeping -- unlike clear_active_configuration(), positioned_configuration_id/
+        positioned_configuration_slot_id are left alone, since the grating/centre/ROI
+        haven't actually moved. Used when the Wavelength/Raman display toggle or the
+        excitation wavelength changes out from under an active calibration, so the
+        calibration can never keep reporting shifts/wavelengths computed for a unit or
+        laser that no longer matches what's on screen.
+        """
+        self.calib_coeffs = None
+        self.axis_source = "pixel"
+        self.calib_unit = "Wavelength"
+        self.calib_laser_wl = None
+        self.active_configuration_id = None
+        self.active_configuration_slot_id = None
+        self.configuration_label = f"{self.configuration_label} (calibration invalidated: {reason})"
+        self.lbl_loaded_configuration.setText(f"Loaded: {self.configuration_label}")
+        self.update_plot_labels()
+        self._refresh_after_axis_change()
 
     def configuration_hardware_context(self):
         """Return cached hardware facts used by both GUI and future API queries."""
@@ -192,7 +281,8 @@ class FileIOMixin:
         return {"roi_mode": mode, "roi_start": int(start), "roi_end": int(end)}
 
     def register_current_configuration(
-        self, coeffs, calibration_unit="Wavelength", excitation_wavelength_nm=None
+        self, coeffs, calibration_unit="Wavelength", excitation_wavelength_nm=None,
+        reference_kind=None, standards=None, raw_spectrum=None,
     ):
         """Create a new active record for the current grating/centre/ROI slot."""
         hardware = self.configuration_hardware_context()
@@ -224,13 +314,6 @@ class FileIOMixin:
                 "detector_width": hardware["detector_width"],
                 "detector_height": hardware["detector_height"],
             },
-            "display": {
-                "mode": (
-                    "Raman shift" if self.radio_spec_mode_raman.isChecked()
-                    else "Wavelength"
-                ),
-                "excitation_wavelength_nm": float(self.spin_exc_wl.value()),
-            },
             "calibration": {
                 "source": "emission_standard_polynomial",
                 "unit": calibration_unit,
@@ -239,9 +322,25 @@ class FileIOMixin:
                     if calibration_unit == "Raman shift"
                     else None
                 ),
+                # Which standard(s) the operator actually assigned peaks
+                # against, and whether a Raman-shift calibration came from
+                # emission-lamp lines (converted via the excitation
+                # wavelength) or a Raman-shift-native standard measured
+                # directly -- see CalibrationWindow._reference_kind_for.
+                "reference_kind": reference_kind or (
+                    "emission_lines_with_excitation"
+                    if calibration_unit == "Raman shift" else "emission_lines"
+                ),
+                "standards": standards or [],
                 "coefficients": {
                     "c0": float(c0), "c1": float(c1), "c2": float(c2),
                 },
+                # The measured spectrum the operator fit peaks against, in the
+                # same raw (unflipped) sensor pixel domain as the coefficients
+                # above -- kept as evidence of how this calibration was derived.
+                "raw_spectrum": (
+                    [float(v) for v in raw_spectrum] if raw_spectrum is not None else None
+                ),
             },
         }
         return self.configuration_catalog.register_configuration(draft)
@@ -334,8 +433,24 @@ class FileIOMixin:
     ):
         detector = record["detector"]
         spectrometer = record["spectrometer"]
-        display = record.get("display", {})
         calibration = record["calibration"]
+
+        # Checked before any widget is mutated, so a rejected load leaves the GUI
+        # untouched. axis_mode="pixel" (API-only; positions hardware without
+        # applying calibration) has no laser-mismatch concern at all, since it
+        # never applies or reads the calibration's excitation wavelength below.
+        if axis_mode == "calibrated" and calibration["unit"] == "Raman shift":
+            saved_excitation_nm = calibration["excitation_wavelength_nm"]
+            if excitation_wavelength_key(self.spin_exc_wl.value()) != excitation_wavelength_key(
+                saved_excitation_nm
+            ):
+                raise ConfigurationCompatibilityError([
+                    "Excitation wavelength does not match: this configuration was "
+                    f"calibrated at {saved_excitation_nm:.3f} nm, but the excitation "
+                    f"wavelength is currently set to {self.spin_exc_wl.value():.3f} nm. "
+                    "Set the excitation wavelength to the calibrated value first, or "
+                    "load a configuration matching the current laser."
+                ])
 
         roi_mode = detector["roi_mode"]
         if roi_mode == "2d":
@@ -353,23 +468,15 @@ class FileIOMixin:
         self.spin_vend.blockSignals(False)
         self.apply_roi_settings()
 
-        self.radio_spec_mode_raman.blockSignals(True)
-        self.radio_spec_mode_wl.blockSignals(True)
-        excitation_wavelength = display.get("excitation_wavelength_nm")
-        if excitation_wavelength is None:
-            excitation_wavelength = calibration.get("excitation_wavelength_nm")
-        if excitation_wavelength is not None:
-            self.spin_exc_wl.setValue(float(excitation_wavelength))
-
-        display_mode = display.get("mode", calibration["unit"])
-        if display_mode == "Raman shift":
-            self.radio_spec_mode_raman.setChecked(True)
-            self.lbl_centre.setText("Centre (cm⁻¹):")
-        else:
-            self.radio_spec_mode_wl.setChecked(True)
-            self.lbl_centre.setText("Centre (nm):")
-        self.radio_spec_mode_raman.blockSignals(False)
-        self.radio_spec_mode_wl.blockSignals(False)
+        # axis_mode="pixel" deliberately leaves the Wavelength/Raman display toggle
+        # and the excitation wavelength exactly as the operator currently has them --
+        # positioning hardware only must not have side effects on calibration/display
+        # state (matches _apply_pixel_configuration()'s "never touch calibration"
+        # behavior, which finalizes this same load a few lines below).
+        if axis_mode == "calibrated":
+            self._sync_display_mode_to_unit(
+                calibration["unit"], calibration.get("excitation_wavelength_nm")
+            )
 
         cb_idx = next(
             (
@@ -389,7 +496,9 @@ class FileIOMixin:
             center_nm = float(self.physical_center_wl)
         else:
             center_nm = float(spectrometer["target_center_wavelength_nm"])
-        if display_mode == "Raman shift":
+        # axis_mode="pixel" never changed the display toggle/spin_exc_wl above, so this
+        # must follow whatever is currently displayed, not the loaded record's own unit.
+        if self.radio_spec_mode_raman.isChecked():
             ex_wl = self.spin_exc_wl.value()
             if ex_wl > 0 and center_nm > 0:
                 center_for_spinbox = 1e7 / ex_wl - 1e7 / center_nm

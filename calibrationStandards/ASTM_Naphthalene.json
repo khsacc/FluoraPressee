@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "standard_id": "ASTM-Naphthalene",
+  "display_name": "Naphthalene (ASTM)",
+  "quantity": "raman_shift_cm1",
+  "source_url": "https://doi.org/10.1002/9780470027325.s0705",
+  "catalogue_metadata": {
+    "citation": "Carrabba, M.M. (2006). Wavenumber Standards for Raman Spectrometry. In Handbook of Vibrational Spectroscopy. John Wiley & Sons, Ltd. Table 3, 'ASTM / Naphthalene' column.",
+    "note": "Values are the table's average Raman shift; uncertainty_cm1 stores the reported standard deviation, not an expanded/coverage-factor uncertainty."
+  },
+  "lines": [
+    {"raman_shift_cm1": 513.8, "species": "Naphthalene", "uncertainty_cm1": 0.31},
+    {"raman_shift_cm1": 763.8, "species": "Naphthalene", "uncertainty_cm1": 0.31},
+    {"raman_shift_cm1": 1021.6, "species": "Naphthalene", "uncertainty_cm1": 0.49},
+    {"raman_shift_cm1": 1147.2, "species": "Naphthalene", "uncertainty_cm1": 0.34},
+    {"raman_shift_cm1": 1382.2, "species": "Naphthalene", "uncertainty_cm1": 0.31},
+    {"raman_shift_cm1": 1464.5, "species": "Naphthalene", "uncertainty_cm1": 0.29},
+    {"raman_shift_cm1": 1576.6, "species": "Naphthalene", "uncertainty_cm1": 0.29},
+    {"raman_shift_cm1": 3056.4, "species": "Naphthalene", "uncertainty_cm1": 0.41}
+  ]
+}
