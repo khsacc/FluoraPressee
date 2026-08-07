@@ -30,7 +30,7 @@ FluoRaPresséeは、高圧実験で使用することを念頭に置いて開発
 現在、以下の装置構成に対応しています。
 
 - Andor 製カメラ + Andor 製分光器（Kymera / Shamrock）
-  - ただし、Andor 製の装置でなくても、Andor系の制御プログラムを用いて制御可能な場合があります。Zolix Omni-λ5006iはその例です。
+  - ただし、Andor 製の装置でなくても、Andor Shamrock系の制御プログラムを用いて制御可能な場合があります。Zolix Omni-λ5006iはその例です。
 - Princeton Instruments 製カメラ + Acton SPシリーズ分光器
 - Ocean Optics製分光器（USB2000/USB4000）
 
