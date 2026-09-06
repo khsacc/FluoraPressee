@@ -1,7 +1,7 @@
 from concurrent.futures import TimeoutError as FutureTimeoutError
 
 import numpy as np
-from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request
 
 from src.api.schemas import (
     AcquireFitRequest,
@@ -28,8 +28,15 @@ from src.core.configuration_catalog import (
     ConfigurationCompatibilityError,
     ConfigurationError,
 )
+from src.core.api_clients import find_client, ip_allowed
 from src.core.pressureCalc import PressureCalculator
-from src.ui.ui_mixins.api_mixin import BackgroundMismatchError, ExposureApplyError
+from src.ui.ui_mixins.acquisition_mixin import GateBusyError
+from src.ui.ui_mixins.api_mixin import (
+    BackgroundMismatchError,
+    CameraNotReadyError,
+    ExposureApplyError,
+    StateTokenMismatchError,
+)
 
 
 def _to_list(arr):
@@ -55,7 +62,7 @@ def _jsonify(obj):
     return obj
 
 
-def create_app(gui_window, gui_bridge) -> FastAPI:
+def create_app(gui_window, gui_bridge, expose_docs: bool = False) -> FastAPI:
     """Build the FastAPI app exposing ApiMixin's methods over HTTP.
 
     All routes here run as plain (non-async) functions so Starlette executes
@@ -64,21 +71,80 @@ def create_app(gui_window, gui_bridge) -> FastAPI:
     to be invoked from the GUI thread, and because an async handler would
     block uvicorn's single event loop for the whole duration of a blocking
     acquisition, stalling every other concurrent request.
+
+    `expose_docs` is off by default: the key check is a router dependency, so
+    FastAPI's own /docs, /redoc and /openapi.json are not behind it and would
+    otherwise describe the whole instrument API to anyone who can reach the port.
     """
-    app = FastAPI(title="FluoRaPressée API")
+    docs_kwargs = (
+        {} if expose_docs
+        else {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    )
+    app = FastAPI(title="FluoRaPressée API", **docs_kwargs)
 
-    def verify_api_key(x_api_key: str | None = Header(default=None)):
-        # Reads gui_window._api_key live on every request (rather than
-        # closing over a value captured at server-start time) so that
-        # ApiMixin.regenerate_api_key() invalidates the old key immediately,
-        # without needing to restart this server.
-        # Use Header(default=None) rather than a required Header(...) so a
-        # missing header and a wrong one both resolve to the same 401 here,
-        # instead of FastAPI's default 422 for a missing required header.
-        if x_api_key is None or x_api_key != gui_window._api_key:
-            raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key header")
+    def ensure_accepting():
+        """Refuse new requests the moment the operator switches the server off.
 
-    router = APIRouter(dependencies=[Depends(verify_api_key)])
+        uvicorn's should_exit only stops the accept loop; it neither interrupts a
+        running handler nor rejects a request already queued. Turning the server off
+        means "stop taking new work", so that rejection happens here, ahead of the key
+        check (work_API_standby.md 方針6).
+        """
+        if not getattr(gui_window, "_api_accepting", True):
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "shutting_down",
+                    "message": "The API server is shutting down and is not accepting "
+                               "new requests.",
+                },
+            )
+
+    def verify_api_key(
+        request: Request, x_api_key: str | None = Header(default=None)
+    ):
+        """Identify the calling client by key, then check where it called from.
+
+        Reads gui_window._api_clients live on every request (rather than closing over
+        the value captured at server-start time) so adding or revoking a client in the
+        Manage Clients dialog takes effect on the very next request.
+
+        Use Header(default=None) rather than a required Header(...) so a missing
+        header and a wrong one both resolve to the same 401, instead of FastAPI's
+        default 422 for a missing required header.
+        """
+        clients = getattr(gui_window, "_api_clients", ())
+        client = find_client(clients, x_api_key)
+        if client is None:
+            raise HTTPException(
+                status_code=401, detail="Invalid or missing X-API-Key header"
+            )
+
+        host = request.client.host if request.client is not None else None
+        if not ip_allowed(client, host):
+            # Deliberately says the key is valid but the address is not. That does
+            # leak "this key exists" to whoever holds it, but on a lab LAN the ability
+            # to tell a wrong key from a wrong address is worth far more than hiding
+            # it: without the distinction a mis-set allow-list is indistinguishable
+            # from a mistyped key (work_API_standby.md 方針7).
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "ip_not_allowed",
+                    "message": (
+                        f"Client {client['name']!r} is not authorised from "
+                        f"{host or 'an unknown address'}."
+                    ),
+                },
+            )
+
+        request.state.api_client = client["name"]
+        record = getattr(gui_window, "note_api_request", None)
+        if record is not None:
+            record(client["name"], host)
+
+    # Order matters: a shutting-down server answers 503 regardless of the key.
+    router = APIRouter(dependencies=[Depends(ensure_accepting), Depends(verify_api_key)])
 
     def _run_acquire(req: AcquireRequest) -> dict:
         try:
@@ -90,6 +156,7 @@ def create_app(gui_window, gui_bridge) -> FastAPI:
                 ignore_mismatch=req.dark.ignore_mismatch,
                 configuration_id=req.configuration_id,
                 axis_mode=req.axis_mode or "calibrated",
+                expected_state_token=req.expected_state_token,
             )
         except ConfigurationCompatibilityError as e:
             raise HTTPException(
@@ -102,6 +169,26 @@ def create_app(gui_window, gui_bridge) -> FastAPI:
             )
         except ConfigurationError as e:
             raise HTTPException(status_code=404, detail=str(e))
+        except CameraNotReadyError as e:
+            # 503, not 4xx: the instrument is temporarily absent, and nothing about the
+            # request itself is wrong. Applies to /acquire, /acquire/fit and
+            # /acquire/pressure alike, since all three come through here.
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "camera_not_ready", "message": str(e)},
+            )
+        except StateTokenMismatchError as e:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "state_token_mismatch",
+                    "message": str(e),
+                    "expected_state_token": e.expected,
+                    "instrument_state_token": e.current,
+                },
+            )
+        except GateBusyError as e:
+            raise HTTPException(status_code=409, detail=e.detail)
         except RuntimeError as e:
             if str(e) in {"acquisition busy", "instrument busy"}:
                 raise HTTPException(status_code=409, detail=str(e))
@@ -121,6 +208,8 @@ def create_app(gui_window, gui_bridge) -> FastAPI:
     def _run_hardware_info(fn, device_name):
         try:
             return fn()
+        except GateBusyError as e:
+            raise HTTPException(status_code=409, detail=e.detail)
         except RuntimeError as e:
             if str(e) == "instrument busy":
                 raise HTTPException(status_code=409, detail=str(e))
@@ -144,6 +233,7 @@ def create_app(gui_window, gui_bridge) -> FastAPI:
             "configuration": result["configuration"],
             "hardware_state": result["hardware_state"],
             "x_axis": result["x_axis"],
+            "instrument_state_token": result.get("instrument_state_token"),
         }
         if "background_mismatch_warning" in result:
             payload["background_mismatch_warning"] = result["background_mismatch_warning"]
@@ -267,6 +357,8 @@ def create_app(gui_window, gui_bridge) -> FastAPI:
             )
         except ConfigurationError as e:
             raise HTTPException(status_code=404, detail=str(e))
+        except GateBusyError as e:
+            raise HTTPException(status_code=409, detail=e.detail)
         except RuntimeError as e:
             if str(e) == "instrument busy":
                 raise HTTPException(status_code=409, detail=str(e))
@@ -283,6 +375,8 @@ def create_app(gui_window, gui_bridge) -> FastAPI:
                 req.c0, req.c1, req.c2, req.unit,
                 laser_wavelength_nm=req.laser_wavelength_nm, label=req.label,
             ))
+        except GateBusyError as e:
+            raise HTTPException(status_code=409, detail=e.detail)
         except ConfigurationCompatibilityError as e:
             raise HTTPException(
                 status_code=409,

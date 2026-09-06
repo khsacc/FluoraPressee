@@ -21,7 +21,9 @@ class SpectrometerControlMixin:
         what the other keeps in sync.
         """
         is_raman = self.radio_spec_mode_raman.isChecked()
-        self.spin_exc_wl.setEnabled(is_raman)
+        # Reached from apply_calibration()'s _sync_display_mode_to_unit() during an
+        # API-driven configuration apply, so it must respect the UI lock.
+        self.spin_exc_wl.setEnabled(is_raman and not self._ui_is_locked())
 
         if is_raman:
             self.lbl_centre.setText("Centre (cm⁻¹):")
@@ -56,9 +58,11 @@ class SpectrometerControlMixin:
             if new_unit != self.calib_unit:
                 self.deactivate_axis_calibration("display mode changed")
 
+        self._bump_instrument_state()
         self._sync_controls_to_display_mode()
 
     def on_exc_wl_changed(self):
+        self._bump_instrument_state()
         if self.calib_coeffs is not None and self.calib_unit == "Raman shift":
             if (
                 self.calib_laser_wl is None
@@ -98,6 +102,11 @@ class SpectrometerControlMixin:
         self.lbl_axis_warning.setVisible(axis_kind == "native_wavelength")
 
     def check_spectrometer_changes(self, *args):
+        if self._ui_is_locked():
+            # spin_centre_wl.setValue() during a configuration apply reaches this via
+            # valueChanged, which would otherwise re-enable Apply mid-lock.
+            self.btn_apply_spec.setEnabled(False)
+            return
         curr_g = self.combo_grating.currentText()
         val = self.spin_centre_wl.value()
 
@@ -162,7 +171,7 @@ class SpectrometerControlMixin:
         # A completed API-triggered move must not partially undo the broader
         # API-server/sequential UI lock. _unlock_ui() will restore controls
         # after every lock reason has been removed.
-        if enabled and getattr(self, "_ui_lock_reasons", set()):
+        if enabled and self._ui_is_locked():
             enabled = False
         self.combo_grating.setEnabled(enabled)
         self.radio_spec_mode_wl.setEnabled(enabled)
@@ -212,7 +221,13 @@ class SpectrometerControlMixin:
             dialog.accept()
             self.spec_move_dialog = None
         self.spec_move_cancel_btn = None
+        # Kept symmetric with _show_spectrometer_moving_dialog()'s setEnabled(False),
+        # then immediately re-narrowed: this runs at the end of every API-triggered
+        # configuration apply, where an unconditional re-enable would drop the whole
+        # UI lock (work_API_standby.md 方針4 経路1). Order matters - re-applying the
+        # lock first would be overwritten by setEnabled(True).
         self.centralWidget().setEnabled(True)
+        self._reassert_ui_lock()
 
     def on_spectrometer_move_phase(self, phase):
         """Enable Cancel only once the wavelength-move phase begins (see
@@ -226,6 +241,38 @@ class SpectrometerControlMixin:
             self.spec_move_cancel_btn.setText("Cancelling...")
         if hasattr(self, 'spec_move_thread'):
             self.spec_move_thread.request_cancel()
+
+    def on_apply_spectrometer_clicked(self):
+        """Entry point for the Apply button. The move is an async scope, so this
+        explicitly takes the gate here and releases it from every branch of
+        on_spectrometer_moved() (work_API_standby.md 表#4).
+
+        The on_apply_spectrometer() call made via a configuration load never goes
+        through this entry point, since the caller there already holds the gate.
+        """
+        if not self._try_acquire_gate():
+            QMessageBox.warning(
+                self, "Busy",
+                "Another operation is in progress. Please try again in a moment."
+            )
+            return
+        self._gui_spec_apply_gate_held = True
+        try:
+            self.on_apply_spectrometer()
+        except Exception:
+            self._release_gui_spec_apply_gate()
+            raise
+
+    def _release_gui_spec_apply_gate(self):
+        """Release only the gate ownership taken by the Apply button.
+
+        This flag is never set by a configuration-load-driven move (GUI or API), so
+        calling this unconditionally from the same on_spectrometer_moved() branches
+        can never mistake one owner for the other.
+        """
+        if getattr(self, "_gui_spec_apply_gate_held", False):
+            self._gui_spec_apply_gate_held = False
+            self._release_acquisition_gate()
 
     def on_apply_spectrometer(self):
         combo_index = self.combo_grating.currentIndex()
@@ -272,6 +319,7 @@ class SpectrometerControlMixin:
                     break
             self.physical_grating = self.combo_grating.currentText()
             self.physical_center_wl = actual_wl
+            self._bump_instrument_state()
             if self.radio_spec_mode_raman.isChecked():
                 ex_wl = self.spin_exc_wl.value()
                 shown_value = (1e7 / ex_wl) - (1e7 / actual_wl) if ex_wl > 0 and actual_wl > 0 else 0.0
@@ -288,6 +336,7 @@ class SpectrometerControlMixin:
             )
 
             self._set_spectrometer_controls_enabled(True)
+            self._release_gui_spec_apply_gate()
             if not handled_by_api:
                 QMessageBox.information(
                     self, "Move cancelled",
@@ -314,6 +363,7 @@ class SpectrometerControlMixin:
             handled_by_api = self._fail_pending_configuration(message)
             self._close_spectrometer_moving_dialog()
             self._set_spectrometer_controls_enabled(True)
+            self._release_gui_spec_apply_gate()
             if not handled_by_api:
                 QMessageBox.warning(self, "Spectrometer error", message)
             return
@@ -326,6 +376,7 @@ class SpectrometerControlMixin:
         else:
             self.physical_center_wl = val
 
+        self._bump_instrument_state()
         self.btn_apply_spec.setEnabled(False)
 
         if getattr(self, '_loading_config', False):
@@ -341,3 +392,4 @@ class SpectrometerControlMixin:
 
         self._close_spectrometer_moving_dialog()
         self._set_spectrometer_controls_enabled(True)
+        self._release_gui_spec_apply_gate()

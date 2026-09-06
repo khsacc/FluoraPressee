@@ -61,7 +61,15 @@ class SpectrographStatusWorker(QThread):
 
 
 class InstrumentStatusDialog(QDialog):
-    def __init__(self, camera_thread, spectrograph_controller, busy_check=None, parent=None):
+    def __init__(
+        self,
+        camera_thread,
+        spectrograph_controller,
+        busy_check=None,
+        gate_acquire=None,
+        gate_release=None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.setWindowTitle("Instrument Status")
         self.resize(760, 620)
@@ -69,6 +77,14 @@ class InstrumentStatusDialog(QDialog):
         self._camera_thread = camera_thread
         self._spectrograph_controller = spectrograph_controller
         self._busy_check = busy_check or (lambda: False)
+        # A refresh really does query the hardware (camera request_status() and the
+        # spectrograph worker below), so it has to hold the same exclusion gate as a
+        # measurement. This window is modeless, so the gate is held for one refresh
+        # cycle only - never for as long as the window is open, which would block every
+        # API request while an operator leaves the status window up.
+        self._gate_acquire = gate_acquire
+        self._gate_release = gate_release
+        self._gate_held = False
         self._camera_supported = hasattr(camera_thread, "request_status") and hasattr(camera_thread, "status_ready")
         self._spectrograph_worker = None
         self._pending = set()
@@ -149,8 +165,43 @@ class InstrumentStatusDialog(QDialog):
         self._poll_timer.stop()
         super().hideEvent(event)
 
+    def _acquire_gate(self):
+        if self._gate_acquire is None:
+            return True
+        if self._gate_held:
+            return True
+        if not self._gate_acquire():
+            return False
+        self._gate_held = True
+        return True
+
+    def _maybe_release_gate(self):
+        """Release only once nothing is still touching the hardware.
+
+        The spectrograph worker may outlive a timed-out request (it can still hold the
+        controller lock), so a timeout deliberately keeps the gate until
+        _on_worker_finished() confirms the thread really exited - the same rule
+        ApiMixin uses for GET /hardware/spectrometer?refresh=true.
+        """
+        if not self._gate_held:
+            return
+        worker = self._spectrograph_worker
+        if self._pending or (worker is not None and worker.isRunning()):
+            return
+        self._gate_held = False
+        if self._gate_release is not None:
+            self._gate_release()
+
     def refresh(self):
         if self._pending or self._is_busy():
+            self._refresh_controls()
+            return
+
+        if not self._acquire_gate():
+            self._status_label.setText(
+                "The instrument is busy with another operation (a remote request or a "
+                "local measurement). Try refreshing again in a moment."
+            )
             self._refresh_controls()
             return
 
@@ -161,17 +212,34 @@ class InstrumentStatusDialog(QDialog):
         self._refresh_controls()
 
         if self._camera_supported:
-            self._camera_thread.request_status()
+            try:
+                self._camera_thread.request_status()
+            except Exception as exc:
+                self._parts["camera"] = unavailable_device(
+                    type(self._camera_thread).__name__, exc
+                )
+                self._pending.discard("camera")
         else:
             self._on_camera_ready(
                 unavailable_device(type(self._camera_thread).__name__, "Camera status reporting is unavailable.")
             )
 
-        worker = SpectrographStatusWorker(self._spectrograph_controller, self)
-        self._spectrograph_worker = worker
-        worker.result_ready.connect(self._on_spectrograph_ready)
-        worker.finished.connect(lambda worker=worker: self._on_worker_finished(worker))
-        worker.start()
+        try:
+            worker = SpectrographStatusWorker(self._spectrograph_controller, self)
+            self._spectrograph_worker = worker
+            worker.result_ready.connect(self._on_spectrograph_ready)
+            worker.finished.connect(lambda worker=worker: self._on_worker_finished(worker))
+            worker.start()
+        except Exception as exc:
+            self._spectrograph_worker = None
+            self._parts["spectrograph"] = unavailable_device(
+                type(self._spectrograph_controller).__name__, exc
+            )
+            self._pending.discard("spectrograph")
+
+        # Either startup call may fail synchronously. Finish immediately if both did;
+        # otherwise the surviving request (or the timeout) retains and releases the gate.
+        self._finish_if_ready()
 
     def _on_camera_ready(self, snapshot):
         if "camera" not in self._pending:
@@ -191,16 +259,26 @@ class InstrumentStatusDialog(QDialog):
         if self._spectrograph_worker is worker:
             self._spectrograph_worker = None
         worker.deleteLater()
+        self._maybe_release_gate()
         self._refresh_controls()
 
     def _finish_if_ready(self):
         if self._pending:
             return
         self._request_timeout.stop()
-        self._report = make_report(self._parts["camera"], self._parts["spectrograph"])
-        self._render_report()
-        self._status_label.setText(f"Last updated: {self._report['captured_at']}")
-        self._refresh_controls()
+        try:
+            self._report = make_report(
+                self._parts["camera"], self._parts["spectrograph"]
+            )
+            self._render_report()
+            self._status_label.setText(
+                f"Last updated: {self._report['captured_at']}"
+            )
+        finally:
+            # Formatting/rendering is downstream of the hardware reads and must not
+            # turn a display error into a permanently held instrument gate.
+            self._maybe_release_gate()
+            self._refresh_controls()
 
     def _on_request_timeout(self):
         if "camera" in self._pending:
@@ -353,5 +431,9 @@ class InstrumentStatusDialog(QDialog):
         self._request_timeout.stop()
         worker = self._spectrograph_worker
         if worker is not None and worker.isRunning():
-            return worker.wait(3000)
+            if not worker.wait(3000):
+                return False
+            self._spectrograph_worker = None
+        self._pending.clear()
+        self._maybe_release_gate()
         return True

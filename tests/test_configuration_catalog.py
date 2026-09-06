@@ -1,4 +1,5 @@
 import hashlib
+import threading
 import json
 import sqlite3
 import tempfile
@@ -1079,6 +1080,160 @@ class ConfigurationCatalogTests(unittest.TestCase):
                     "configuration_id": raman["configuration_id"],
                 },
             ],
+        )
+
+
+class RecordCacheTests(unittest.TestCase):
+    """get_configuration() memoises records so API responses can snapshot
+    configuration state on the GUI thread without a SQLite query + file read + hash
+    on every request (work_API_standby.md Step 7a)."""
+
+    def setUp(self):
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.catalog = ConfigurationCatalog(self.tempdir.name)
+        self.record = self.catalog.register_configuration(draft())
+        self.configuration_id = self.record["configuration_id"]
+
+    def tearDown(self):
+        self.tempdir.cleanup()
+
+    def _record_path(self):
+        with sqlite3.connect(self.catalog.database_path) as conn:
+            row = conn.execute(
+                "SELECT relative_path FROM configurations WHERE configuration_id = ?",
+                (self.configuration_id,),
+            ).fetchone()
+        return self.catalog.root / row[0]
+
+    def test_second_read_is_served_from_memory(self):
+        first = self.catalog.get_configuration(self.configuration_id)
+        self._record_path().unlink()
+
+        second = self.catalog.get_configuration(self.configuration_id)
+
+        self.assertEqual(first, second)
+
+    def test_mutating_the_returned_record_does_not_poison_the_cache(self):
+        first = self.catalog.get_configuration(self.configuration_id)
+        first["calibration"]["coefficients"]["c0"] = -1.0
+        first["spectrometer"]["grating_index"] = 99
+
+        second = self.catalog.get_configuration(self.configuration_id)
+
+        self.assertEqual(second["calibration"]["coefficients"]["c0"], 669.4)
+        self.assertEqual(second["spectrometer"]["grating_index"], 1)
+
+    def test_registering_a_configuration_invalidates_the_cache(self):
+        self.catalog.get_configuration(self.configuration_id)
+        self._record_path().unlink()
+        self.catalog.register_configuration(draft(c0=1.0))
+
+        with self.assertRaises(ConfigurationError):
+            self.catalog.get_configuration(self.configuration_id)
+
+    def test_marking_used_keeps_the_immutable_record_cached(self):
+        first = self.catalog.get_configuration(self.configuration_id)
+        self._record_path().unlink()
+
+        self.catalog.mark_used(self.configuration_id)
+        second = self.catalog.get_configuration(self.configuration_id)
+
+        self.assertEqual(second, first)
+
+    def test_deleting_a_version_invalidates_the_cache(self):
+        newer = self.catalog.register_configuration(draft(c0=1.0))
+        self.catalog.get_configuration(self.configuration_id)
+
+        self.catalog.delete_configuration_version(self.configuration_id)
+
+        with self.assertRaises(ConfigurationError):
+            self.catalog.get_configuration(self.configuration_id)
+        self.assertIsNotNone(
+            self.catalog.get_configuration(newer["configuration_id"])
+        )
+
+    def test_raw_spectrum_is_shared_by_reference_across_reads(self):
+        """Regression: get_configuration() used to deepcopy() the whole record on
+        every call, hit or miss, including calibration.raw_spectrum - a blob that no
+        caller anywhere reads back or mutates after registration. Sharing it by
+        reference (via deepcopy's memo) removes that cost while _copy_configuration_record
+        still independently deep-copies everything else, so mutating one read's
+        nested dicts must never be visible in another read.
+        """
+        raw_spectrum = [1.0, 2.0, 3.0]
+        draft_with_spectrum = draft()
+        draft_with_spectrum["calibration"]["raw_spectrum"] = raw_spectrum
+        record = self.catalog.register_configuration(draft_with_spectrum)
+        configuration_id = record["configuration_id"]
+
+        first = self.catalog.get_configuration(configuration_id)
+        second = self.catalog.get_configuration(configuration_id)
+
+        self.assertIs(
+            first["calibration"]["raw_spectrum"],
+            second["calibration"]["raw_spectrum"],
+            "raw_spectrum should be the same shared object across reads",
+        )
+        self.assertIsNot(
+            first["calibration"]["coefficients"],
+            second["calibration"]["coefficients"],
+            "everything other than raw_spectrum must still be independently copied",
+        )
+
+        first["calibration"]["coefficients"]["c0"] = -999.0
+        third = self.catalog.get_configuration(configuration_id)
+        self.assertNotEqual(third["calibration"]["coefficients"]["c0"], -999.0)
+
+    def test_concurrent_delete_during_a_cache_miss_does_not_resurrect_the_record(self):
+        """Regression: get_configuration()'s cache-miss path reads from disk with the
+        lock released (so I/O doesn't block other threads), then re-takes the lock to
+        write the result back. If a delete's _invalidate_record_cache() lands in that
+        window, the write-back used to run after it and silently put the just-deleted
+        record right back into the cache - served forever until the process restarted.
+        The generation counter must catch this: the write-back is skipped whenever the
+        generation changed while the disk read was in flight.
+        """
+        newer = self.catalog.register_configuration(draft(c0=1.0))
+        self.catalog._invalidate_record_cache()  # force a real cache miss below
+
+        reached_normalize = threading.Event()
+        deleted = threading.Event()
+        original_normalize = self.catalog._normalize_record
+
+        def delayed_normalize(*args, **kwargs):
+            result = original_normalize(*args, **kwargs)
+            reached_normalize.set()
+            # Give the deleting thread a bounded window to invalidate the cache
+            # before this thread reaches the write-back below.
+            deleted.wait(timeout=5)
+            return result
+
+        self.catalog._normalize_record = delayed_normalize
+        try:
+            results = {}
+
+            def reader():
+                results["value"] = self.catalog.get_configuration(
+                    self.configuration_id
+                )
+
+            reader_thread = threading.Thread(target=reader)
+            reader_thread.start()
+            self.assertTrue(reached_normalize.wait(timeout=5))
+
+            self.catalog.delete_configuration_version(self.configuration_id)
+            deleted.set()
+            reader_thread.join(timeout=5)
+        finally:
+            self.catalog._normalize_record = original_normalize
+
+        # The in-flight read still correctly returns what was on disk when it started.
+        self.assertEqual(results["value"]["configuration_id"], self.configuration_id)
+        # But it must not have been written back into the cache after the delete.
+        with self.assertRaises(ConfigurationError):
+            self.catalog.get_configuration(self.configuration_id)
+        self.assertIsNotNone(
+            self.catalog.get_configuration(newer["configuration_id"])
         )
 
 

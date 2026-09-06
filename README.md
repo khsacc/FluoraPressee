@@ -118,6 +118,26 @@ instead.
 * Turn **ON** "Fitting Configurations" to perform real-time curve fitting on the displayed spectrum.
 * When a double-peak fit is successful, turn **ON** the "Pressure Calculation" section to automatically calculate and display the pressure based on the Ruby R1 peak.
 
+### Remote Operation over HTTP
+Finish calibration and setup in the GUI, then pick a **Mode** in the "API Server" panel to let another
+machine on the same LAN trigger measurements over HTTP.
+
+| Mode | Listening | Measurement / configuration controls |
+|---|---|---|
+| **Off** (default) | no | always available |
+| **Standby** | always | locked only while a request is actually operating the instrument |
+| **Locked** | always | locked for as long as the server runs (the original "Start API Server" behaviour) |
+
+Standby means nobody has to walk to the rig to switch the server on before every remote measurement: the
+controls are locked only for the duration of each request, and **● Remote control active** lights up
+in the panel while that is the case. The chosen mode is remembered and resumes on the next launch.
+
+API keys are issued per client under **API → Manage Clients...**, so a single client can be revoked
+without affecting the others. Traffic is not encrypted, so use this on a trusted LAN only.
+
+See the [API reference in the online manual](https://khsacc.github.io/FluoRaPressee/api) for the
+endpoints and their request/response formats.
+
 ## 📁 File Structure
 
 * ui.py: Main GUI application script.

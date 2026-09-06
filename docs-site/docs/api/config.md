@@ -1,5 +1,5 @@
 ---
-sidebar_position: 4
+sidebar_position: 6
 title: "GET /config"
 description: 起動時設定と保存済み設定を返すエンドポイント
 ---
@@ -39,4 +39,5 @@ description: 起動時設定と保存済み設定を返すエンドポイント
 - `restart_required`: `model`, `com_port`, `dll_path`, `PIcam_dll_path`, `camera_serial_number` のいずれかに未反映の変更があるか。
 - `pending_restart_keys`: 再起動待ちのキー一覧。
 - `redacted_fields`: `api_key`, `password`, `token`, `secret` を名前に含むキーをレスポンスから除外した場合のパス一覧。
-  APIキー用の別ファイル `fluora_pressee_api_key.json` は常に対象外です。
+  APIキーは `spectrometerConfig.json` ではなく別ファイル（[クライアントと認証](clients.md)）に
+  保存されているため、そもそもこのレスポンスには現れません。

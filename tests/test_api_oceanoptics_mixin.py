@@ -41,6 +41,18 @@ def _fake_type(name, module, namespace=None):
     return type(name, (), {"__module__": module, **(namespace or {})})
 
 
+class _FakeTimer:
+    def __init__(self):
+        self.started_with = None
+        self.stop_count = 0
+
+    def start(self, interval_ms):
+        self.started_with = interval_ms
+
+    def stop(self):
+        self.stop_count += 1
+
+
 class _Harness(ApiMixin, AcquisitionMixin):
     def __init__(self, thread=None, spec_ctrl=None):
         self.thread = thread
@@ -48,8 +60,23 @@ class _Harness(ApiMixin, AcquisitionMixin):
         self.config = {}
         self._acquisition_gate = threading.Lock()
         self._gate_held_by_me = False
+        self._gate_owner = None
+        # SequentialMixin is not mixed in here; stand in for the lock bookkeeping
+        # _try_acquire_gate("api")/_release_acquisition_gate() drive (方針4), and for
+        # the QTimer that debounces the release (方針5).
+        self._ui_lock_reasons = set()
+        self._api_unlock_timer = _FakeTimer()
+        self._api_unlock_delay_ms = 1000
+        self._instrument_state_epoch = "testepoch"
+        self._instrument_state_counter = 0
         self.debug = False
         self.spin_accumulate = _Value(1)
+
+    def _lock_ui(self, reason):
+        self._ui_lock_reasons.add(reason)
+
+    def _unlock_ui(self, reason, reapply_hardware=True):
+        self._ui_lock_reasons.discard(reason)
 
     def _instrument_status_busy(self):
         return False
@@ -165,6 +192,9 @@ class _ExposureFailingThread:
     def get_exposure_error(self, seq):
         return self.error_message if seq == self._seq else None
 
+    def isRunning(self):
+        return True
+
 
 class _ExposureSucceedingThread(_ExposureFailingThread):
     def get_exposure_error(self, seq):
@@ -219,6 +249,9 @@ class ExposureFailureBlocksAcquisitionTests(unittest.TestCase):
     def test_backends_without_get_exposure_error_are_unaffected(self):
         class _PlainThread:
             current_exposure = 0.1
+
+            def isRunning(self):
+                return True
 
             def update_exposure(self, exp_time):
                 return 1

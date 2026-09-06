@@ -107,6 +107,11 @@ class Window(FileIOMixin):
     def update_plot_labels(self):
         pass
 
+    def _bump_instrument_state(self):
+        # AcquisitionMixin owns the real one; count the calls so a load can be shown
+        # to invalidate a previously issued instrument_state_token.
+        self.instrument_state_bumps = getattr(self, "instrument_state_bumps", 0) + 1
+
     def sync_fit_range_to_spectrum(self, force=False):
         pass
 

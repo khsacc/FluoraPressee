@@ -13,7 +13,6 @@ from PyQt6.QtWidgets import QApplication
 # Import the required classes and functions from ui.py
 from src.ui import SpectrometerGUI
 from src.app_bootstrap import print_software_and_author_info, check_and_create_config
-from src.api.gui_bridge import GuiBridge
 from src.ui.theme import apply_application_style
 
 def main():
@@ -31,10 +30,8 @@ def main():
         app = QApplication(sys.argv)
     apply_application_style(app)
 
-    bridge = GuiBridge()
-
+    # SpectrometerGUI builds its own GuiBridge (see its __init__).
     window = SpectrometerGUI(debug=debug_mode)
-    window.gui_bridge = bridge
     window.show()
 
     sys.exit(app.exec())

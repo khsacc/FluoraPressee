@@ -14,6 +14,15 @@ def print_software_and_author_info():
     )
 
 def check_and_create_config():
+    """Run ConfigWizard to create spectrometerConfig.json, but only on first launch.
+
+    This runs **before SpectrometerGUI is constructed**, so the measurement-rights
+    exclusion gate (SpectrometerGUI._acquisition_gate) does not exist yet. The API
+    server is not running at this point either, so there is no competitor to
+    exclude. ConfigWizard is therefore deliberately out of scope for the exclusion
+    gate (work_API_standby.md 方針2 "対象外"). Do not "fix" this later by making it
+    take the gate.
+    """
     config_path = "spectrometerConfig.json"
     if os.path.exists(config_path):
         return

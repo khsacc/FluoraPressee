@@ -1,5 +1,5 @@
+import functools
 import json
-import secrets
 import socket
 import threading
 from concurrent.futures import Future, TimeoutError as FutureTimeoutError
@@ -7,6 +7,7 @@ from datetime import datetime
 
 import numpy as np
 import uvicorn
+from PyQt6.QtCore import QCoreApplication, QThread
 from PyQt6.QtWidgets import QMessageBox
 
 from src.api.info_helpers import (
@@ -19,6 +20,7 @@ from src.core.configuration_catalog import format_configuration_label
 from src.hardware.status.instrument_status import legacy_camera_snapshot, unavailable_device
 from src.core.measurement_metadata import capture_hardware_state, public_axis_kind, public_axis_unit
 from src.core.pressureCalc import PressureCalculator
+from src.ui.ui_mixins.acquisition_mixin import GateBusyError
 
 
 class BackgroundMismatchError(Exception):
@@ -29,6 +31,31 @@ class BackgroundMismatchError(Exception):
     pass
 
 
+class CameraNotReadyError(Exception):
+    """Raised by _api_start_acquire() when the camera thread is not running.
+
+    In Standby mode the app listens all day, so a request can perfectly well arrive
+    while the camera failed to initialise or was never connected. src/api/server.py
+    turns this into a 503: it is a temporary absence of the instrument, not a defect
+    in the caller's request (work_API_standby.md Step 3(A)).
+    """
+    pass
+
+
+class StateTokenMismatchError(Exception):
+    """Raised when a request's expected_state_token no longer matches the instrument.
+
+    Carries the current token so the client can resynchronise without a second call.
+    """
+
+    def __init__(self, expected, current):
+        super().__init__(
+            "The instrument state has changed since the token you supplied was issued."
+        )
+        self.expected = expected
+        self.current = current
+
+
 class ExposureApplyError(Exception):
     """Raised by _api_start_acquire() when the camera thread reports (via its optional
     get_exposure_error(seq)) that a requested exposure_time_s failed to reach hardware -
@@ -37,6 +64,41 @@ class ExposureApplyError(Exception):
     response reported the requested (never-applied) one - see work/work_OceanOptics.md.
     """
     pass
+
+
+# The three API server modes (work_API_standby.md 方針1). "locked" reproduces the
+# original "Start API Server" behaviour exactly: listening plus a UI lock held for the
+# whole run. "standby" listens just the same but locks only while a request is
+# actually operating the instrument.
+API_MODES = ("off", "standby", "locked")
+
+# How often the shutdown watcher checks whether the uvicorn thread has exited.
+_API_STOP_POLL_MS = 200
+
+# Start verification: how often to look, and how many looks before giving up waiting.
+_API_START_POLL_MS = 200
+_API_START_MAX_TICKS = 15
+
+# Head-room added to exposure x accumulations when deriving an acquisition's timeout,
+# covering readout, the frame's trip through the Qt event loop, and camera start-up.
+ACQUIRE_TIMEOUT_MARGIN_S = 15.0
+
+
+@functools.lru_cache(maxsize=1)
+def local_ip_address():
+    """Best-effort LAN address of this machine, for display only.
+
+    Cached for the life of the process: resolving it is a real (occasionally slow)
+    DNS/NSS syscall, and this used to run on the GUI thread on every single API
+    request (via note_api_request -> _build_api_status_text) even though the
+    documented contract here is already "best-effort, for display only" - a machine's
+    LAN address essentially never changes mid-session, and this function was never a
+    promise of a live-verified value.
+    """
+    try:
+        return socket.gethostbyname(socket.gethostname())
+    except Exception:
+        return "127.0.0.1"
 
 
 def _parse_temp_c(text):
@@ -130,8 +192,8 @@ class ApiMixin:
 
     def _api_begin_hardware_refresh(self):
         """Acquire the same exclusion gate used by measurement/calibration."""
-        if self._instrument_status_busy() or not self._try_acquire_gate():
-            raise RuntimeError("instrument busy")
+        if self._instrument_status_busy() or not self._try_acquire_gate("api"):
+            raise GateBusyError(self._gate_busy_reason())
 
     def _api_end_hardware_refresh(self):
         self._release_acquisition_gate()
@@ -247,8 +309,24 @@ class ApiMixin:
             stored_config=stored,
         )
 
+    def _assert_instrument_state_token(self, expected):
+        """Compare a caller-supplied token against the live one.
+
+        Deliberately called at exactly one moment - immediately after the gate is
+        acquired and before anything is changed - so that supplying both a
+        configuration_id and an expected_state_token means "apply this configuration,
+        but abort if anyone changed something first" rather than always mismatching on
+        the configuration apply's own state change (work_API_standby.md 方針8).
+        """
+        if expected is None:
+            return
+        current = self.instrument_state_token
+        if expected != current:
+            raise StateTokenMismatchError(expected, current)
+
     def _api_start_acquire(
-        self, exposure_s=None, accumulations=None, *, gate_already_held=False
+        self, exposure_s=None, accumulations=None, *, gate_already_held=False,
+        dark_mode="none", expected_state_token=None,
     ):
         """Kick off a single-shot acquisition and return immediately.
 
@@ -256,10 +334,26 @@ class ApiMixin:
         the existing data_ready signal path; the returned Future is resolved
         later by _process_completed_data().
         """
-        if not gate_already_held and not self._try_acquire_gate():
-            raise RuntimeError("acquisition busy")
+        # Checked before the gate is taken, so a not-ready camera cannot add another
+        # path that has to remember to release it.
+        if not self.thread.isRunning():
+            raise CameraNotReadyError(
+                "The camera is not initialised, so no acquisition can be started."
+            )
+        if not gate_already_held and not self._try_acquire_gate("api"):
+            raise GateBusyError(self._gate_busy_reason())
         if gate_already_held and not self._acquisition_gate.locked():
             raise RuntimeError("configuration operation lost the acquisition gate")
+        try:
+            # gate_already_held means a configuration apply already compared the token
+            # before it moved anything; comparing again here would fail against the
+            # state that apply itself just created.
+            if not gate_already_held:
+                self._assert_instrument_state_token(expected_state_token)
+        except Exception:
+            if not gate_already_held:
+                self._release_acquisition_gate()
+            raise
 
         actual_accum = accumulations if accumulations is not None else self.spin_accumulate.value()
 
@@ -269,7 +363,8 @@ class ApiMixin:
             # is mid-snap() on a previous long exposure, a flat 0.1s sleep can elapse
             # before it's picked up, and take_single_spectrum() below would then measure
             # with the stale exposure still on the hardware.
-            wait_timeout = self.thread.current_exposure + 15
+            previous_exposure = float(self.thread.current_exposure)
+            wait_timeout = previous_exposure + 15
             seq = self.thread.update_exposure(exposure_s)
             if not self.thread.wait_for_exposure_applied(seq, timeout=wait_timeout):
                 print("Warning: timed out waiting for the new exposure to reach hardware before API acquisition")
@@ -286,6 +381,13 @@ class ApiMixin:
             # unchanged at) rather than blindly trusting the requested value - see
             # work/work_OceanOptics.md review round 5.
             actual_exposure = self.thread.current_exposure
+            if not np.isclose(
+                float(actual_exposure), previous_exposure, rtol=0.0, atol=1e-12
+            ):
+                # The expected token was already checked immediately after taking the
+                # gate.  Bump now so this request's response describes the new physical
+                # exposure and later callers cannot reuse a token for the old state.
+                self._bump_instrument_state()
         else:
             actual_exposure = self.spin_acq_time.value()
 
@@ -294,15 +396,73 @@ class ApiMixin:
 
         future = Future()
         self._api_pending_future = future
+        # Everything _process_completed_data() needs to build the response snapshot
+        # while it still holds the gate (方針9).
+        self._api_pending_context = {
+            "dark_mode": dark_mode,
+            "exposure": actual_exposure,
+            "accumulations": actual_accum,
+        }
         try:
             self.take_single_spectrum()
         except Exception:
             self._active_target_accum = None
             self._api_pending_future = None
+            self._api_pending_context = None
             self._release_acquisition_gate()
             raise
 
         return future, actual_exposure, actual_accum
+
+    def _api_acquire_snapshot(self, raw_len, mode):
+        """Response state captured on the GUI thread while the gate is still held.
+
+        Reading it afterwards would be a lie under multi-client use: another request
+        could change the instrument between the frame arriving and the state being
+        read, so the hardware_state and token returned would not describe the data
+        actually returned. Capturing it inside the gate also cuts the round trips per
+        /acquire from three to one (方針9).
+        """
+        context = getattr(self, "_api_pending_context", None) or {}
+        x, temp_text, bg_data, bg_mismatch = self._api_finalize_acquire(
+            raw_len,
+            mode,
+            context.get("dark_mode", "none"),
+            context.get("exposure", self.spin_acq_time.value()),
+            context.get("accumulations", self.spin_accumulate.value()),
+        )
+        return {
+            "x": x,
+            "temp_text": temp_text,
+            "bg_data": bg_data,
+            "bg_mismatch": bg_mismatch,
+            "configuration_state": self._api_configuration_state(),
+        }
+
+    def _api_abort_acquire(self, future):
+        """Runs on the GUI thread. Cleans up after a timed-out API acquisition.
+
+        Without this the acquisition gate (and with it the UI lock derived from it)
+        would stay held forever after a 504, leaving the GUI permanently locked.
+        Stopping the camera before releasing the gate matters: releasing while the
+        detector is still acquiring would let the next request start and collide with
+        it on hardware.
+        """
+        if getattr(self, "_api_pending_future", None) is not future:
+            # The frame may have completed at the timeout boundary, or a failed/stopped
+            # request may already have released the gate and allowed a newer request to
+            # start.  Cleanup for an old generation must never stop the new acquisition.
+            return
+        self._api_pending_future = None
+        self._api_pending_context = None
+        self._active_target_accum = None
+        self.is_single_shot = False
+        if getattr(self.thread, "is_measuring", False):
+            # stop_measurement() calls _release_acquisition_gate() internally; the
+            # _gate_held_by_me guard means this can never double-release.
+            self.stop_measurement()
+        else:
+            self._release_acquisition_gate()
 
     def _api_check_bg_mismatch(self, actual_exposure, actual_accum):
         """Like FileIOMixin.check_bg_mismatch(), but independent of the
@@ -352,12 +512,17 @@ class ApiMixin:
     # API worker-thread entry point.
     # ------------------------------------------------------------------
 
-    def _api_start_configuration_apply(self, record, axis_mode):
+    def _api_start_configuration_apply(
+        self, record, axis_mode, expected_state_token=None
+    ):
         """Acquire the operation gate and stage/move a configuration on the GUI thread."""
-        if self._instrument_status_busy() or not self._try_acquire_gate():
-            raise RuntimeError("instrument busy")
+        if self._instrument_status_busy() or not self._try_acquire_gate("api"):
+            raise GateBusyError(self._gate_busy_reason())
         completion_future = Future()
         try:
+            # Compared while the gate is held but before anything moves, so this is
+            # the one place the check has to happen for a configuration request.
+            self._assert_instrument_state_token(expected_state_token)
             self._prepare_configuration_for_loading(
                 record,
                 axis_mode=axis_mode,
@@ -379,7 +544,16 @@ class ApiMixin:
 
     def _api_release_gate_after_future(self):
         try:
-            self.gui_bridge.call(self._release_acquisition_gate)
+            app = QCoreApplication.instance()
+            if app is not None and QThread.currentThread() is app.thread():
+                # concurrent.futures callbacks run synchronously in the thread that
+                # completes the Future. Configuration completion normally happens on
+                # the GUI thread, where GuiBridge.call() would reject/deadlock.
+                self._release_acquisition_gate()
+            else:
+                # If the Future completed in the narrow gap before add_done_callback(),
+                # the callback runs immediately on the API worker instead.
+                self.gui_bridge.call(self._release_acquisition_gate)
         except Exception as exc:
             print(f"Failed to release configuration operation gate: {exc}")
 
@@ -389,12 +563,16 @@ class ApiMixin:
         self.configuration_catalog.assert_compatible(record, hardware_context)
         return record
 
-    def _api_wait_for_configuration(self, record, axis_mode, timeout=120.0):
+    def _api_wait_for_configuration(
+        self, record, axis_mode, timeout=120.0, expected_state_token=None
+    ):
         # If this call raises, _api_start_configuration_apply either never
         # acquired the gate (busy), or acquired and released it while rolling
         # back a staging failure. Do not release an unknown owner's gate here.
         future = self.gui_bridge.call(
-            lambda: self._api_start_configuration_apply(record, axis_mode)
+            lambda: self._api_start_configuration_apply(
+                record, axis_mode, expected_state_token=expected_state_token
+            )
         )
         try:
             future.result(timeout=timeout)
@@ -456,6 +634,11 @@ class ApiMixin:
                 positioned_id = None
                 positioned_slot_id = None
         return {
+            # Declared on StatusResponse, AcquireResponse and
+            # ApplyConfigurationResponse (src/api/schemas.py) - pydantic's default
+            # extra="ignore" would otherwise drop it silently - and copied explicitly
+            # in _acquire_response_payload(), which lists its fields by hand.
+            "instrument_state_token": self.instrument_state_token,
             "configuration": {
                 "configuration_id": positioned_id,
                 "slot_id": positioned_slot_id,
@@ -547,6 +730,7 @@ class ApiMixin:
         ignore_mismatch=False,
         configuration_id=None,
         axis_mode="calibrated",
+        expected_state_token=None,
         timeout=30.0,
     ):
         """Synchronous single-shot acquisition for API callers.
@@ -562,7 +746,9 @@ class ApiMixin:
         configuration_applied = False
         if configuration_id is not None:
             record = self._api_validate_configuration(configuration_id)
-            self._api_wait_for_configuration(record, axis_mode)
+            self._api_wait_for_configuration(
+                record, axis_mode, expected_state_token=expected_state_token
+            )
             configuration_applied = True
 
         try:
@@ -571,6 +757,8 @@ class ApiMixin:
                     exposure_s,
                     accumulations,
                     gate_already_held=configuration_applied,
+                    dark_mode=dark_mode,
+                    expected_state_token=expected_state_token,
                 )
             )
         except Exception:
@@ -578,22 +766,26 @@ class ApiMixin:
                 self.gui_bridge.call(self._release_acquisition_gate)
             raise
         acquisition_timeout = max(
-            float(timeout), float(actual_exposure) * int(actual_accum) + 15.0
+            float(timeout),
+            float(actual_exposure) * int(actual_accum) + ACQUIRE_TIMEOUT_MARGIN_S,
         )
-        result = future.result(timeout=acquisition_timeout)
+        try:
+            result = future.result(timeout=acquisition_timeout)
+        except FutureTimeoutError:
+            # Only on timeout: a normal completion is already cleaned up by the
+            # existing data_ready path, so an unconditional finally would double up.
+            self.gui_bridge.call(lambda: self._api_abort_acquire(future))
+            raise
         raw = result["raw"]
         mode = result["mode"]
 
-        x, temp_text, bg_data, bg_mismatch = self.gui_bridge.call(
-            lambda: self._api_finalize_acquire(
-                len(raw) if mode == "1d" else None,
-                mode,
-                dark_mode,
-                actual_exposure,
-                actual_accum,
-            )
-        )
-        configuration_state = self.gui_bridge.call(self._api_configuration_state)
+        # Everything below was captured on the GUI thread while the gate was still
+        # held (方針9), so no further gui_bridge round trip is needed here.
+        x = result["x"]
+        temp_text = result["temp_text"]
+        bg_data = result["bg_data"]
+        bg_mismatch = result["bg_mismatch"]
+        configuration_state = result["configuration_state"]
 
         background_mismatch_warning = False
 
@@ -731,18 +923,23 @@ class ApiMixin:
     def api_apply_calibration(self, c0, c1, c2, unit, laser_wavelength_nm=None, label="api"):
         """Must run on the GUI thread (updates the loaded-configuration label via
         FileIOMixin.apply_calibration()).
+
+        Deprecated, but still reachable, so it takes the exclusion gate like every other
+        state-changing API route (work_API_standby.md 表#14). Applying a calibration is a
+        synchronous scope, so the context manager releases it even on failure.
         """
-        self.apply_calibration(
-            (c0, c1, c2), label, calib_unit=unit,
-            calib_laser_wl=laser_wavelength_nm,
-            axis_source="api_inline_calibration",
-        )
-        return {
-            "applied": True,
-            "unit": self.calib_unit,
-            "c0": c0, "c1": c1, "c2": c2,
-            "label": self.configuration_label,
-        }
+        with self.acquisition_gate("api"):
+            self.apply_calibration(
+                (c0, c1, c2), label, calib_unit=unit,
+                calib_laser_wl=laser_wavelength_nm,
+                axis_source="api_inline_calibration",
+            )
+            return {
+                "applied": True,
+                "unit": self.calib_unit,
+                "c0": c0, "c1": c1, "c2": c2,
+                "label": self.configuration_label,
+            }
 
     def api_get_status(self):
         """Must run on the GUI thread (reads several widgets)."""
@@ -780,96 +977,329 @@ class ApiMixin:
     # ------------------------------------------------------------------
 
     def start_api_server(self, host, port):
-        """Start the FastAPI server in a background thread and lock the
-        measurement/config UI for as long as it runs (see work/work_API.md,
-        "API稼働中のGUI操作ロック").
+        """Start the FastAPI server in a background thread.
+
+        Only the server lifecycle lives here; whether the measurement/config UI is
+        locked for the whole run is the caller's decision, because that is exactly what
+        distinguishes "locked" mode from "standby" (work_API_standby.md 方針1/Step 5).
         """
         # Deferred import: src.api.server imports BackgroundMismatchError from
         # this module, so importing it at module load time here would be a
         # circular import. Importing lazily, inside the method, avoids it.
         from src.api.server import create_app
 
-        self._api_key = self.get_or_create_api_key()
+        self.load_api_client_list()
         self._api_last_port = port
-        api_app = create_app(self, self.gui_bridge)
+        self._api_accepting = True
+        api_app = create_app(
+            self, self.gui_bridge,
+            expose_docs=bool(self.chk_api_expose_docs.isChecked()),
+        )
         config = uvicorn.Config(api_app, host=host, port=port, log_level="info")
         self._api_server = uvicorn.Server(config)
         self._api_server_thread = threading.Thread(target=self._api_server.run, daemon=True)
         self._api_server_thread.start()
-        self._lock_ui("api_server")
 
     def stop_api_server(self):
-        if getattr(self, '_api_server', None) is not None:
-            self._api_server.should_exit = True
-            self._api_server_thread.join(timeout=5)
-            self._api_server = None
-            self._api_server_thread = None
+        """Stop accepting new requests and let in-flight operations finish (方針6).
+
+        uvicorn's should_exit does not interrupt a running handler, and a hardware
+        operation can easily outlive any join() worth blocking the GUI thread for. So
+        the switch-off is: refuse new requests immediately (503 via _api_accepting),
+        ask uvicorn to exit, then watch the thread from a timer. The server references
+        are deliberately kept until the thread has really exited - dropping them while
+        the thread lives was the main defect of the previous 5-second join().
+        """
+        if getattr(self, '_api_server', None) is None:
+            self._unlock_ui("api_server")
+            self._api_stopping = False
+            self._on_api_state_changed()
+            return
+        self._api_accepting = False
+        self._api_stopping = True
+        self._api_server.should_exit = True
+        self._on_api_state_changed()
+        self._api_stop_timer.start(_API_STOP_POLL_MS)
+        # Handles the common case (idle server) without waiting for the first tick.
+        self._check_api_server_stopped()
+
+    def _check_api_server_stopped(self):
+        thread = getattr(self, '_api_server_thread', None)
+        if thread is not None and thread.is_alive():
+            return
+        self._api_stop_timer.stop()
+        self._api_server = None
+        self._api_server_thread = None
+        self._api_stopping = False
         self._unlock_ui("api_server")
+        self._on_api_state_changed()
 
-    def get_or_create_api_key(self):
-        """Load the persisted API key, generating and persisting one on first
-        use so it stays stable across app restarts and server start/stop
-        cycles - the paired client application only needs to be configured
-        with it once (see work/work_API.md for the pre-shared-key rationale).
+    # ------------------------------------------------------------------
+    # Mode management (off / standby / locked).
+    # ------------------------------------------------------------------
+
+    def apply_api_mode(self, mode):
+        """Bring the server in line with `mode`, without restarting it needlessly.
+
+        standby <-> locked differ only in whether the "api_server" UI lock is held, so
+        switching between them leaves the running server (and any in-flight request)
+        completely untouched.
         """
-        key = self.load_api_key_file()
-        if not key:
-            key = secrets.token_urlsafe(24)
-            self.save_api_key_file(key)
-        return key
+        previous = self._api_mode
+        self._api_mode = mode
+        self._save_local_cache("api_mode", mode)
 
-    def regenerate_api_key(self):
-        """Immediately invalidates the current key and persists a new one.
-        src/api/server.py's verify_api_key reads self._api_key live on every
-        request rather than closing over a value captured at server-start
-        time, so this takes effect on the very next request without needing
-        to restart the running server.
-        """
-        self._api_key = secrets.token_urlsafe(24)
-        self.save_api_key_file(self._api_key)
-        return self._api_key
-
-    def _build_api_status_text(self, port):
-        try:
-            local_ip = socket.gethostbyname(socket.gethostname())
-        except Exception:
-            local_ip = "127.0.0.1"
-        return f"Running at http://{local_ip}:{port}/docs\nX-API-Key: {self._api_key}"
-
-    def on_regenerate_api_key_clicked(self):
-        reply = QMessageBox.question(
-            self, "Regenerate API Key",
-            "This immediately invalidates the current API key. Any paired client still using the "
-            "old key will get 401 Unauthorized until it's updated with the new one shown next.\n\n"
-            "Continue?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if reply != QMessageBox.StandardButton.Yes:
+        running = getattr(self, "_api_server", None) is not None
+        if mode == "off":
+            if running:
+                self.stop_api_server()
+            else:
+                self._unlock_ui("api_server")
+                self._on_api_state_changed()
             return
 
-        new_key = self.regenerate_api_key()
-        QMessageBox.information(self, "API Key Regenerated", f"New API key:\n\n{new_key}")
+        if not running:
+            self._start_api_server_for_mode(mode)
+            return
 
-        if getattr(self, '_api_server', None) is not None:
-            self.lbl_api_status.setText(self._build_api_status_text(self._api_last_port))
+        if mode == "locked":
+            self._lock_ui("api_server")
+        elif previous == "locked":
+            self._unlock_ui("api_server")
+        self._on_api_state_changed()
 
-    def on_start_api_server_clicked(self):
+    def _start_api_server_for_mode(self, mode):
+        host = self.combo_api_bind.currentData() or "0.0.0.0"
         port = self.spin_api_port.value()
-        self.start_api_server(host="0.0.0.0", port=port)
+        try:
+            self.start_api_server(host=host, port=port)
+        except Exception as exc:
+            self._api_failed_to_start(str(exc))
+            return
+        if mode == "locked":
+            self._lock_ui("api_server")
+        self._api_start_attempts = 0
+        self._api_start_timer.start(_API_START_POLL_MS)
+        self._on_api_state_changed()
 
-        self.lbl_api_status.setText(self._build_api_status_text(port))
-        self.btn_start_api.setEnabled(False)
-        self._set_button_style(self.btn_start_api, self.BUTTON_STYLE_GREEN)
-        self.spin_api_port.setEnabled(False)
-        self.btn_stop_api.setEnabled(True)
-        self._set_button_style(self.btn_stop_api, self.BUTTON_STYLE_RED)
+    def _check_api_server_started(self):
+        server = getattr(self, "_api_server", None)
+        thread = getattr(self, "_api_server_thread", None)
+        if server is None:
+            self._api_start_timer.stop()
+            return
+        if getattr(server, "started", False):
+            self._api_start_timer.stop()
+            self._on_api_state_changed()
+            return
+        if thread is not None and not thread.is_alive():
+            # uvicorn failed inside its own thread - almost always a port clash.
+            self._api_start_timer.stop()
+            self._api_failed_to_start(
+                f"Could not listen on port {self._api_last_port}. "
+                "The port may already be in use by another program."
+            )
+            return
+        self._api_start_attempts += 1
+        if self._api_start_attempts >= _API_START_MAX_TICKS:
+            # Thread alive but not serving yet. Reverting the mode here would be worse
+            # than waiting: a slow start is far more likely than a silent failure that
+            # keeps the thread running. Stop watching and say so.
+            self._api_start_timer.stop()
+            print("Warning: the API server has not reported readiness yet; "
+                  "it may still be starting.")
+            self._on_api_state_changed()
 
-    def on_stop_api_server_clicked(self):
-        self.stop_api_server()
-        self.lbl_api_status.setText("Not running")
-        self.btn_start_api.setEnabled(True)
-        self._set_button_style(self.btn_start_api, self.BUTTON_STYLE_GREEN)
-        self.spin_api_port.setEnabled(True)
-        self.btn_stop_api.setEnabled(False)
-        self._set_button_style(self.btn_stop_api, self.BUTTON_STYLE_RED)
+    def _api_failed_to_start(self, message):
+        self._api_start_timer.stop()
+        self._api_server = None
+        self._api_server_thread = None
+        self._api_accepting = False
+        self._api_stopping = False
+        self._unlock_ui("api_server")
+        self._set_api_mode_widget("off")
+        self._api_mode = "off"
+        self._save_local_cache("api_mode", "off")
+        self._on_api_state_changed()
+        QMessageBox.critical(
+            self, "API server could not start",
+            f"The API server did not start, so this machine is NOT listening for "
+            f"remote requests.\n\n{message}\n\nThe mode has been set back to Off."
+        )
+
+    def _set_api_mode_widget(self, mode):
+        index = self.combo_api_mode.findData(mode)
+        if index < 0:
+            return
+        self.combo_api_mode.blockSignals(True)
+        self.combo_api_mode.setCurrentIndex(index)
+        self.combo_api_mode.blockSignals(False)
+
+    def on_api_mode_changed(self):
+        mode = self.combo_api_mode.currentData()
+        if mode is None or mode == self._api_mode:
+            return
+        if "api_active" in self._ui_lock_reasons:
+            reply = QMessageBox.question(
+                self, "A remote operation is running",
+                "An API request is currently operating the instrument.\n\n"
+                "Switching the mode stops new requests being accepted, but the "
+                "operation already in progress will run to completion - it is not "
+                "interrupted.\n\nContinue?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                self._set_api_mode_widget(self._api_mode)
+                return
+        self.apply_api_mode(mode)
+
+    def on_api_bind_changed(self):
+        self._save_local_cache(
+            "api_bind_host", self.combo_api_bind.currentData() or "0.0.0.0"
+        )
+
+    def on_api_unlock_delay_changed(self, seconds):
+        self._api_unlock_delay_ms = int(round(float(seconds) * 1000))
+        self._save_local_cache("api_unlock_delay_ms", self._api_unlock_delay_ms)
+
+    def maybe_autostart_api_server(self):
+        """Resume a persisted standby/locked mode once the hardware has settled.
+
+        Called from both the camera-initialised and camera-failed handlers. The order
+        matters and must not be changed: both of those re-enable the central widget
+        unconditionally, so starting to listen any earlier would break the UI lock
+        (work_API_standby.md 方針2 の除外理由). A request that arrives after a failed
+        initialisation is answered with the 503 from Step 3(A).
+        """
+        if getattr(self, "_api_server", None) is not None:
+            return
+        if self._api_mode == "off":
+            return
+        self._start_api_server_for_mode(self._api_mode)
+
+    def _on_api_state_changed(self):
+        """Refresh the API panel from the server's actual state."""
+        running = getattr(self, '_api_server', None) is not None
+        stopping = getattr(self, '_api_stopping', False)
+        if running and stopping:
+            self.lbl_api_status.setText(
+                "Stopping… (the request in progress is allowed to finish)"
+            )
+        elif running:
+            self.lbl_api_status.setText(
+                self._build_api_status_text(self._api_last_port)
+            )
+        else:
+            self.lbl_api_status.setText("Not running")
+        # Port/bind/docs only take effect at start-up, so they are frozen while the
+        # server runs. The mode selector itself always stays live.
+        for widget in (self.spin_api_port, self.combo_api_bind, self.chk_api_expose_docs):
+            widget.setEnabled(not running)
+        self.combo_api_mode.setEnabled(not stopping)
+        self._update_remote_active_indicator()
+
+    def _update_remote_active_indicator(self):
+        """Light the "Remote control active" marker while a request owns the gate.
+
+        In Standby the controls come and go on their own, so the operator needs to be
+        able to tell at a glance that a remote client - not a local glitch - is
+        driving the instrument (work_API_standby.md Step 5 手順5).
+        """
+        label = getattr(self, "lbl_api_remote_active", None)
+        if label is None:
+            return
+        label.setVisible("api_active" in getattr(self, "_ui_lock_reasons", set()))
+
+    # ------------------------------------------------------------------
+    # Named API clients.
+    # ------------------------------------------------------------------
+
+    def load_api_client_list(self):
+        """Load (and cache) the authorised clients as an immutable snapshot.
+
+        src/api/server.py re-reads self._api_clients on every request rather than
+        closing over the value captured at server-start time, so an edit takes effect
+        on the very next request without restarting the server.
+        """
+        self._api_clients = tuple(self.load_api_clients())
+        return self._api_clients
+
+    def set_api_clients(self, clients):
+        """Replace the client list wholesale.
+
+        Rebinding the attribute is atomic, so a worker thread mid-request either sees
+        the old tuple or the new one, never a partially edited list - which is why the
+        reader needs no lock (see src/core/api_clients.py).
+        """
+        snapshot = tuple(clients)
+        try:
+            self.save_api_clients(snapshot)
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                "Could not save API clients",
+                "The client changes were not applied because they could not be "
+                f"saved safely.\n\n{exc}",
+            )
+            return False
+        self._api_clients = snapshot
+        return True
+
+    def on_manage_api_clients_clicked(self):
+        from src.ui.menu.api_clients_dialog import ApiClientsDialog
+
+        dialog = ApiClientsDialog(
+            self.load_api_client_list(),
+            last_seen=self._api_last_seen,
+            parent=self,
+        )
+        if dialog.exec() == dialog.DialogCode.Accepted:
+            if self.set_api_clients(dialog.clients):
+                self._on_api_state_changed()
+
+    def _build_api_status_text(self, port):
+        host = self.combo_api_bind.currentData() or "0.0.0.0"
+        shown_host = local_ip_address() if host == "0.0.0.0" else host
+        mode_text = {"standby": "Standby", "locked": "Locked"}.get(self._api_mode, "")
+        lines = [f"{mode_text}: listening at http://{shown_host}:{port}"]
+        last = getattr(self, "_api_last_request", None)
+        if last is not None:
+            lines.append(
+                f"Last request: {last['client']} ({last['ip']}) {last['time']}"
+            )
+        lines.append("Keys are managed under API → Manage Clients.")
+        return "\n".join(lines)
+
+    def _refresh_last_request_label(self):
+        """Lightweight refresh used by note_api_request(): only the "Last request"
+        text can have changed just because a request came in - running/stopping and
+        the widget-enabled state _on_api_state_changed() also touches cannot - so this
+        skips that work instead of redoing it several times a second in Standby mode.
+        It also skips _update_remote_active_indicator(): that indicator only changes
+        when the lock itself changes, which _lock_ui()/_unlock_ui() already handle.
+        """
+        if getattr(self, '_api_server', None) is not None and not getattr(
+            self, '_api_stopping', False
+        ):
+            self.lbl_api_status.setText(
+                self._build_api_status_text(self._api_last_port)
+            )
+
+    def note_api_request(self, client_name, client_ip):
+        """Record who last called, for the panel's "Last request" line.
+
+        Called from an API worker thread, so it updates plain data and queues the
+        widget refresh on the GUI thread.
+        """
+        self._api_last_request = {
+            "client": client_name or "unknown",
+            "ip": client_ip or "unknown",
+            "time": datetime.now().strftime("%H:%M:%S"),
+        }
+        self._api_last_seen.record(client_name or "unknown", client_ip)
+        post = getattr(self.gui_bridge, "post", None)
+        if post is not None:
+            # Authentication runs in a FastAPI worker. Queue the label refresh instead
+            # of touching Qt widgets here or blocking every request on GuiBridge.call().
+            post(self._refresh_last_request_label)

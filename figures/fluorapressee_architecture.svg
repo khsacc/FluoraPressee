@@ -1,0 +1,353 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" version="1.1" viewBox="0 0 481.9 419.5">
+  <defs>
+    <style>
+      .cls-1 {
+        font-size: 7.4px;
+      }
+
+      .cls-1, .cls-2, .cls-3, .cls-4, .cls-5, .cls-6, .cls-7, .cls-8, .cls-9, .cls-10, .cls-11, .cls-12, .cls-13, .cls-14, .cls-15, .cls-16, .cls-17 {
+        isolation: isolate;
+      }
+
+      .cls-1, .cls-3, .cls-4, .cls-18, .cls-7, .cls-8, .cls-9, .cls-10, .cls-19, .cls-20, .cls-14, .cls-17 {
+        fill: #1a1a1a;
+      }
+
+      .cls-1, .cls-3, .cls-4, .cls-14 {
+        font-family: HelveticaNeue-Medium, 'Helvetica Neue';
+        font-weight: 500;
+      }
+
+      .cls-21 {
+        fill: #2b2b2b;
+      }
+
+      .cls-22 {
+        stroke: #9484b3;
+      }
+
+      .cls-22, .cls-23, .cls-24, .cls-25, .cls-26, .cls-27, .cls-28, .cls-18, .cls-29, .cls-30, .cls-19, .cls-20, .cls-31, .cls-32, .cls-33 {
+        stroke-miterlimit: 11.3;
+      }
+
+      .cls-22, .cls-24, .cls-25, .cls-27, .cls-33 {
+        fill: #fff;
+        stroke-width: .7px;
+      }
+
+      .cls-2 {
+        font-size: 5.2px;
+      }
+
+      .cls-2, .cls-5, .cls-6, .cls-11, .cls-12, .cls-13, .cls-15, .cls-16 {
+        fill: #3a3a3a;
+      }
+
+      .cls-2, .cls-34, .cls-7, .cls-8, .cls-9, .cls-10, .cls-11, .cls-12, .cls-13, .cls-15, .cls-16, .cls-17 {
+        font-family: Helvetica, Helvetica;
+      }
+
+      .cls-23 {
+        stroke-dasharray: 4.3 3.4;
+      }
+
+      .cls-23, .cls-26 {
+        fill: #f7f7f7;
+      }
+
+      .cls-23, .cls-26, .cls-28, .cls-29, .cls-30, .cls-20, .cls-31, .cls-32 {
+        stroke-width: 1px;
+      }
+
+      .cls-23, .cls-26, .cls-30 {
+        stroke: #4a4a4a;
+      }
+
+      .cls-24 {
+        stroke: #8c8c8c;
+      }
+
+      .cls-3, .cls-10 {
+        font-size: 6.2px;
+      }
+
+      .cls-25 {
+        stroke: #7fa07b;
+      }
+
+      .cls-4 {
+        font-size: 7.9px;
+      }
+
+      .cls-35 {
+        letter-spacing: 0em;
+      }
+
+      .cls-35, .cls-36, .cls-37 {
+        font-family: KozGoPr6N-Regular-83pv-RKSJ-H, 'Kozuka Gothic Pr6N';
+      }
+
+      .cls-5, .cls-12 {
+        font-size: 5.7px;
+      }
+
+      .cls-36 {
+        letter-spacing: 0em;
+      }
+
+      .cls-27 {
+        stroke: #7591b3;
+      }
+
+      .cls-28 {
+        fill: #dee8f3;
+        stroke: #35577d;
+      }
+
+      .cls-6, .cls-13 {
+        font-size: 5.5px;
+      }
+
+      .cls-18 {
+        stroke-dasharray: 4.5 3.4;
+      }
+
+      .cls-18, .cls-19 {
+        stroke-width: 1.1px;
+      }
+
+      .cls-18, .cls-19, .cls-20 {
+        stroke: #2b2b2b;
+      }
+
+      .cls-7 {
+        font-size: 6.5px;
+      }
+
+      .cls-8, .cls-15 {
+        font-size: 5.4px;
+      }
+
+      .cls-9, .cls-14 {
+        font-size: 6.8px;
+      }
+
+      .cls-29 {
+        fill: #e3efe2;
+        stroke: #43663f;
+      }
+
+      .cls-30 {
+        fill: #ededed;
+      }
+
+      .cls-11 {
+        font-size: 6px;
+      }
+
+      .cls-31 {
+        fill: #f6ecd8;
+        stroke: #8a6a30;
+      }
+
+      .cls-16 {
+        font-size: 5.1px;
+      }
+
+      .cls-17 {
+        font-size: 7.1px;
+      }
+
+      .cls-32 {
+        fill: #eae2f2;
+        stroke: #5d4a7d;
+      }
+
+      .cls-33 {
+        stroke: #b79a6b;
+      }
+    </style>
+  </defs>
+  <!-- Generator: Adobe Illustrator 28.6.0, SVG Export Plug-In . SVG Version: 1.2.0 Build 709)  -->
+  <g>
+    <g id="_レイヤー_1" data-name="レイヤー_1">
+      <rect class="cls-30" x="11.3" y="17" width="311.8" height="51"/>
+      <text class="cls-4" transform="translate(18.4 30)"><tspan x="0" y="0">Instrument rig</tspan></text>
+      <rect class="cls-24" x="19.8" y="36.9" width="82.2" height="25.5"/>
+      <text class="cls-17" transform="translate(48.9 48.2)"><tspan x="0" y="0">Sample</tspan></text>
+      <text class="cls-11" transform="translate(37.4 57.5)"><tspan x="0" y="0">diamond anvil cell</tspan></text>
+      <path class="cls-20" d="M103.5,49.6h6"/>
+      <path class="cls-21" d="M109.4,46.2v6.8l6.2-3.4-6.2-3.4Z"/>
+      <rect class="cls-24" x="116.2" y="36.9" width="96.4" height="25.5"/>
+      <text class="cls-17" transform="translate(143.2 48.2)"><tspan x="0" y="0">Spectrograph</tspan></text>
+      <text class="cls-11" transform="translate(129.7 57.5)"><tspan x="0" y="0">grating, centre wavelength</tspan></text>
+      <path class="cls-20" d="M214,49.6h6"/>
+      <path class="cls-21" d="M220,46.2v6.8l6.2-3.4-6.2-3.4Z"/>
+      <rect class="cls-24" x="226.8" y="36.9" width="87.9" height="25.5"/>
+      <text class="cls-17" transform="translate(248.6 48.2)"><tspan x="0" y="0">Array detector</tspan></text>
+      <text class="cls-11" transform="translate(232.3 57.5)"><tspan x="0" y="0">CCD / CMOS, exposure, ROI</tspan></text>
+      <g id="legend" inkscape:label="Arrow legend">
+        <path class="cls-19" d="M14.2,80.5h10.8"/>
+        <path class="cls-21" d="M24.9,77.1v6.8l6.2-3.4-6.2-3.4Z"/>
+        <text class="cls-16" transform="translate(35.4 82.5)"><tspan x="0" y="0">measurement data</tspan></text>
+        <path class="cls-18" d="M14.2,91.8h10.8"/>
+        <path class="cls-21" d="M24.9,88.4v6.8l6.2-3.4-6.2-3.4Z"/>
+        <text class="cls-16" transform="translate(35.4 93.8)"><tspan x="0" y="0">settings, commands</tspan></text>
+      </g>
+      <g id="arrows-instrument-hardware">
+        <path class="cls-19" d="M90.7,68v27.8"/>
+        <path class="cls-21" d="M87.3,95.8h6.8l-3.4,6.2-3.4-6.2Z"/>
+        <text class="cls-10" transform="translate(96.4 81.1)"><tspan x="0" y="0">raw detector frames</tspan></text>
+        <text class="cls-12" transform="translate(96.4 89.6)"><tspan x="0" y="0">polled in the acquisition loop</tspan></text>
+        <path class="cls-18" d="M249.4,102v-27.8"/>
+        <path class="cls-21" d="M246,74.3h6.8l-3.4-6.2-3.4,6.2Z"/>
+        <text class="cls-11" transform="translate(256.5 78.2)"><tspan x="0" y="0">grating, centre λ,</tspan></text>
+        <text class="cls-11" transform="translate(256.5 86.7)"><tspan x="0" y="0">exposure, ROI,</tspan></text>
+        <text class="cls-11" transform="translate(256.5 95.2)"><tspan x="0" y="0">temperature setpoint</tspan></text>
+      </g>
+      <g id="layer-hardware" inkscape:label="src/hardware">
+        <rect class="cls-28" x="11.3" y="102" width="311.8" height="85" rx="3.4" ry="3.4"/>
+        <text class="cls-4" transform="translate(18.4 115.1)"><tspan x="0" y="0">src/hardware — device abstraction</tspan></text>
+        <text class="cls-15" transform="translate(18.4 124.7)"><tspan x="0" y="0">factory functions CameraThread() / SpectrometerController() select a backend from spectrometerConfig.json</tspan></text>
+        <rect class="cls-27" x="19.8" y="131.2" width="96.4" height="30.6" rx="2.3" ry="2.3"/>
+        <text class="cls-9" transform="translate(59 142.6)"><tspan x="0" y="0">Andor</tspan></text>
+        <text class="cls-13" transform="translate(45.1 151.4)"><tspan x="0" y="0">pyLabLib (camera)</tspan></text>
+        <text class="cls-13" transform="translate(35 159.6)"><tspan x="0" y="0">ShamrockCIF.dll via ctypes</tspan></text>
+        <rect class="cls-27" x="123.3" y="131.2" width="96.4" height="30.6" rx="2.3" ry="2.3"/>
+        <text class="cls-9" transform="translate(148.7 142.6)"><tspan x="0" y="0">Princeton Instr.</tspan></text>
+        <text class="cls-13" transform="translate(148.6 151.4)"><tspan x="0" y="0">pyLabLib (camera)</tspan></text>
+        <text class="cls-13" transform="translate(143.7 159.6)"><tspan x="0" y="0">serial control (pyserial)</tspan></text>
+        <rect class="cls-27" x="226.8" y="131.2" width="87.9" height="30.6" rx="2.3" ry="2.3"/>
+        <text class="cls-9" transform="translate(250.1 142.6)"><tspan x="0" y="0">Ocean Optics</tspan></text>
+        <text class="cls-13" transform="translate(241.8 151.4)"><tspan x="0" y="0">seabreeze (lazy import)</tspan></text>
+        <text class="cls-13" transform="translate(238 159.6)"><tspan x="0" y="0">combined spectro-detector</tspan></text>
+        <rect class="cls-27" x="19.8" y="166.4" width="144.6" height="18.1" rx="2.3" ry="2.3"/>
+        <text class="cls-10" transform="translate(26.9 174.3)"><tspan x="0" y="0">AccumulationCombiner</tspan></text>
+        <text class="cls-15" transform="translate(26.9 181.7)"><tspan x="0" y="0">sums frames per cycle; cosmic-ray rejection</tspan></text>
+        <rect class="cls-27" x="171.5" y="166.4" width="143.1" height="18.1" rx="2.3" ry="2.3"/>
+        <text class="cls-10" transform="translate(178.6 174.3)"><tspan x="0" y="0">src/hardware/status/</tspan></text>
+        <text class="cls-15" transform="translate(178.6 181.7)"><tspan x="0" y="0">read-only diagnostics, snapshots, hardware probe</tspan></text>
+      </g>
+      <g id="arrows-hardware-ui">
+        <path class="cls-19" d="M90.7,187.1v22.1"/>
+        <path class="cls-21" d="M87.3,209.2h6.8l-3.4,6.2-3.4-6.2Z"/>
+        <text class="cls-10" transform="translate(96.4 198.4)"><tspan x="0" y="0">spectrum / image frame</tspan></text>
+        <text class="cls-5" transform="translate(96.4 206.9)"><tspan class="cls-34" x="0" y="0">data_ready signal </tspan><tspan class="cls-36" x="46.3" y="0">→</tspan><tspan class="cls-34" x="52" y="0" xml:space="preserve"> GUI thread</tspan></text>
+        <path class="cls-18" d="M249.4,215.4v-22.1"/>
+        <path class="cls-21" d="M246,193.3h6.8l-3.4-6.2-3.4,6.2Z"/>
+        <text class="cls-11" transform="translate(256.5 198.4)"><tspan x="0" y="0">settings via locked</tspan></text>
+        <text class="cls-11" transform="translate(256.5 206.9)"><tspan x="0" y="0">thread variables</tspan></text>
+      </g>
+      <g id="layer-ui" inkscape:label="src/ui">
+        <rect class="cls-31" x="11.3" y="215.4" width="311.8" height="90.7" rx="3.4" ry="3.4"/>
+        <text class="cls-4" transform="translate(18.4 228.5)"><tspan x="0" y="0">src/ui — PyQt6 graphical interface</tspan></text>
+        <text class="cls-6" transform="translate(219.8 228.5)"><tspan class="cls-34" x="0" y="0">entry point: main.py </tspan><tspan class="cls-35" x="49.8" y="0">→</tspan><tspan class="cls-34" x="55.3" y="0" xml:space="preserve"> app_bootstrap.py</tspan></text>
+        <rect class="cls-33" x="19.8" y="233.9" width="155.9" height="31.2" rx="2.3" ry="2.3"/>
+        <text class="cls-7" transform="translate(26.9 244.6)"><tspan x="0" y="0">SpectrometerGUI (main_window.py)</tspan></text>
+        <text class="cls-15" transform="translate(26.9 253.4)"><tspan x="0" y="0">widget construction and signal wiring only;</tspan></text>
+        <text class="cls-15" transform="translate(26.9 261.6)"><tspan x="0" y="0">all state and handlers live in the mixins</tspan></text>
+        <rect class="cls-33" x="182.8" y="233.9" width="131.8" height="31.2" rx="2.3" ry="2.3"/>
+        <text class="cls-7" transform="translate(189.9 244.6)"><tspan x="0" y="0">Dialogs and panels</tspan></text>
+        <text class="cls-15" transform="translate(189.9 253.4)"><tspan x="0" y="0">calibration · pressure calculator</tspan></text>
+        <text class="cls-15" transform="translate(189.9 261.6)"><tspan x="0" y="0">configuration browser · status views</tspan></text>
+        <rect class="cls-33" x="19.8" y="269.3" width="294.8" height="14.2" rx="2.3" ry="2.3"/>
+        <text class="cls-8" transform="translate(26.9 278.6)"><tspan x="0" y="0">mixins: acquisition · display · spectrometer_control · sequential · file_io · config · pressure · api</tspan></text>
+        <rect class="cls-33" x="19.8" y="287.7" width="294.8" height="15.6" rx="2.3" ry="2.3"/>
+        <text class="cls-10" transform="translate(26.9 295.7)"><tspan x="0" y="0">Analysis Mode (analysis_main.py)</tspan></text>
+        <text class="cls-15" transform="translate(26.9 302.2)"><tspan x="0" y="0">hardware-free re-analysis; shares FittingConfigWidget with the live GUI</tspan></text>
+      </g>
+      <g id="arrows-ui-core">
+        <path class="cls-19" d="M90.7,306.1v19.3"/>
+        <path class="cls-21" d="M87.3,325.4h6.8l-3.4,6.2-3.4-6.2Z"/>
+        <text class="cls-10" transform="translate(96.4 316.3)"><tspan x="0" y="0">background-corrected spectrum</tspan></text>
+        <text class="cls-12" transform="translate(96.4 324.8)"><tspan x="0" y="0">with calibrated x axis</tspan></text>
+        <path class="cls-19" d="M249.4,331.7v-19.3"/>
+        <path class="cls-21" d="M246,312.4h6.8l-3.4-6.2-3.4,6.2Z"/>
+        <text class="cls-11" transform="translate(256.5 316.3)"><tspan x="0" y="0">peak positions, FWHM,</tspan></text>
+        <text class="cls-11" transform="translate(256.5 324.8)"><tspan x="0" y="0">pressure in GPa</tspan></text>
+      </g>
+      <g id="layer-core" inkscape:label="src/core">
+        <rect class="cls-29" x="11.3" y="331.7" width="311.8" height="76.5" rx="3.4" ry="3.4"/>
+        <text class="cls-4" transform="translate(18.4 344.7)"><tspan x="0" y="0">src/core — Qt-independent analysis and data model</tspan></text>
+        <rect class="cls-25" x="19.8" y="350.1" width="90.7" height="31.2" rx="2.3" ry="2.3"/>
+        <text class="cls-7" transform="translate(42.6 360.8)"><tspan x="0" y="0">CalibrationCore</tspan></text>
+        <text class="cls-6" transform="translate(40.3 369.6)"><tspan class="cls-34" x="0" y="0">pixel </tspan><tspan class="cls-35" x="12.9" y="0">→</tspan><tspan class="cls-34" x="18.4" y="0" xml:space="preserve"> wavelength or</tspan></text>
+        <text class="cls-13" transform="translate(34.6 377.9)"><tspan x="0" y="0">Raman shift (polynomial)</tspan></text>
+        <path class="cls-20" d="M112,365.7h6"/>
+        <path class="cls-21" d="M117.9,362.3v6.8l6.2-3.4-6.2-3.4Z"/>
+        <rect class="cls-25" x="124.7" y="350.1" width="90.7" height="31.2" rx="2.3" ry="2.3"/>
+        <text class="cls-7" transform="translate(150.6 360.8)"><tspan x="0" y="0">DataAnalyzer</tspan></text>
+        <text class="cls-13" transform="translate(136.5 369.6)"><tspan x="0" y="0">1–5 peaks: Gauss, Lorentz,</tspan></text>
+        <text class="cls-13" transform="translate(138.9 377.9)"><tspan x="0" y="0">pseudo-Voigt, Moffat; BIC</tspan></text>
+        <path class="cls-20" d="M216.9,365.7h6"/>
+        <path class="cls-21" d="M222.8,362.3v6.8l6.2-3.4-6.2-3.4Z"/>
+        <rect class="cls-25" x="229.6" y="350.1" width="85" height="31.2" rx="2.3" ry="2.3"/>
+        <text class="cls-7" transform="translate(244.4 360.8)"><tspan x="0" y="0">PressureCalculator</tspan></text>
+        <text class="cls-6" transform="translate(247.4 369.6)"><tspan class="cls-34" x="0" y="0">peak shift </tspan><tspan class="cls-37" x="25.2" y="0">→</tspan><tspan class="cls-34" x="30.7" y="0" xml:space="preserve"> P (GPa):</tspan></text>
+        <text class="cls-13" transform="translate(238 377.9)"><tspan x="0" y="0">ruby, Sm²⁺, diamond, cBN…</tspan></text>
+        <rect class="cls-25" x="19.8" y="386.9" width="102" height="17" rx="2.3" ry="2.3"/>
+        <text class="cls-10" transform="translate(26.9 395.1)"><tspan x="0" y="0">DataFileIO</tspan></text>
+        <text class="cls-2" transform="translate(26.9 402.2)"><tspan x="0" y="0">spectra · dark · fit · sequential</tspan></text>
+        <rect class="cls-25" x="129" y="386.9" width="102" height="17" rx="2.3" ry="2.3"/>
+        <text class="cls-10" transform="translate(136.1 395.1)"><tspan x="0" y="0">ConfigurationCatalog</tspan></text>
+        <text class="cls-2" transform="translate(136.1 402.2)"><tspan x="0" y="0">versioned records + SQLite index</tspan></text>
+        <rect class="cls-25" x="238.1" y="386.9" width="76.5" height="17" rx="2.3" ry="2.3"/>
+        <text class="cls-10" transform="translate(245.2 395.1)"><tspan x="0" y="0">measurement_metadata</tspan></text>
+        <text class="cls-2" transform="translate(245.2 402.2)"><tspan x="0" y="0">hardware snapshot</tspan></text>
+      </g>
+      <g id="remote-host" inkscape:label="Remote host">
+        <rect class="cls-26" x="345.8" y="17" width="124.7" height="51" rx="3.4" ry="3.4"/>
+        <text class="cls-1" transform="translate(352.9 30)"><tspan x="0" y="0">Remote host</tspan></text>
+        <text class="cls-12" transform="translate(352.9 41.4)"><tspan x="0" y="0">any machine on the LAN</tspan></text>
+        <text class="cls-12" transform="translate(352.9 49.9)"><tspan x="0" y="0">measurement scripts,</tspan></text>
+        <text class="cls-12" transform="translate(352.9 58.4)"><tspan x="0" y="0">other instruments</tspan></text>
+      </g>
+      <g id="arrow-http">
+        <path class="cls-19" d="M360,74.3v134.9"/>
+        <path class="cls-21" d="M356.6,74.3h6.8l-3.4-6.2-3.4,6.2Z"/>
+        <path class="cls-21" d="M356.6,209.2h6.8l-3.4,6.2-3.4-6.2Z"/>
+        <text class="cls-3" transform="translate(369.9 99.2)"><tspan x="0" y="0">HTTP + JSON, X-API-Key</tspan></text>
+        <text class="cls-12" transform="translate(369.9 112)"><tspan x="0" y="0">POST /acquire</tspan></text>
+        <text class="cls-12" transform="translate(369.9 120.5)"><tspan x="0" y="0">POST /acquire/fit</tspan></text>
+        <text class="cls-12" transform="translate(369.9 129)"><tspan x="0" y="0">POST /acquire/pressure</tspan></text>
+        <text class="cls-12" transform="translate(369.9 137.5)"><tspan x="0" y="0">GET /status, /config</tspan></text>
+        <text class="cls-12" transform="translate(369.9 146)"><tspan x="0" y="0">GET /configurations</tspan></text>
+        <text class="cls-12" transform="translate(369.9 154.5)"><tspan x="0" y="0">POST /configurations/…/apply</tspan></text>
+        <text class="cls-12" transform="translate(369.9 163)"><tspan x="0" y="0">GET /hardware/camera</tspan></text>
+      </g>
+      <g id="layer-api" inkscape:label="src/api">
+        <rect class="cls-32" x="345.8" y="215.4" width="124.7" height="90.7" rx="3.4" ry="3.4"/>
+        <text class="cls-1" transform="translate(352.9 228.5)"><tspan x="0" y="0">src/api — HTTP control</tspan></text>
+        <text class="cls-12" transform="translate(352.9 238.7)"><tspan x="0" y="0">FastAPI · Pydantic · uvicorn</tspan></text>
+        <text class="cls-12" transform="translate(352.9 246.9)"><tspan x="0" y="0">started manually from the GUI</tspan></text>
+        <rect class="cls-22" x="352.9" y="252.3" width="110.6" height="29.8" rx="2.3" ry="2.3"/>
+        <text class="cls-7" transform="translate(360 261.6)"><tspan x="0" y="0">GuiBridge</tspan></text>
+        <text class="cls-13" transform="translate(360 270.4)"><tspan x="0" y="0">marshals worker-thread calls</tspan></text>
+        <text class="cls-13" transform="translate(360 278.6)"><tspan x="0" y="0">onto the Qt GUI thread</tspan></text>
+        <text class="cls-12" transform="translate(352.9 290.8)"><tspan x="0" y="0">route logic: ApiMixin (src/ui)</tspan></text>
+        <text class="cls-12" transform="translate(352.9 299.6)"><tspan x="0" y="0">GUI controls locked while up</tspan></text>
+      </g>
+      <g id="arrow-guibridge">
+        <path class="cls-19" d="M329.4,266.5h10.2"/>
+        <path class="cls-21" d="M329.4,263.1v6.8l-6.2-3.4,6.2-3.4Z"/>
+        <path class="cls-21" d="M339.6,263.1v6.8l6.2-3.4-6.2-3.4Z"/>
+      </g>
+      <g id="files-on-disk" inkscape:label="Files on disk">
+        <rect class="cls-23" x="345.8" y="331.7" width="124.7" height="76.5" rx="3.4" ry="3.4"/>
+        <text class="cls-14" transform="translate(352.9 344.7)"><tspan x="0" y="0">Files on disk</tspan></text>
+        <text class="cls-12" transform="translate(352.9 356.6)"><tspan x="0" y="0">spectra, dark and fit results</tspan></text>
+        <text class="cls-12" transform="translate(352.9 365.1)"><tspan x="0" y="0">sequential run outputs</tspan></text>
+        <text class="cls-12" transform="translate(352.9 375.9)"><tspan x="0" y="0">spectrometerConfig.json</tspan></text>
+        <text class="cls-12" transform="translate(352.9 384.4)"><tspan x="0" y="0">local_cache.json</tspan></text>
+        <text class="cls-12" transform="translate(352.9 395.1)"><tspan x="0" y="0">configurations/records/*.json</tspan></text>
+        <text class="cls-12" transform="translate(352.9 403.7)"><tspan x="0" y="0">configurations/catalog.sqlite3</tspan></text>
+      </g>
+      <g id="arrow-files">
+        <path class="cls-19" d="M329.4,369.9h10.2"/>
+        <path class="cls-21" d="M329.4,366.5v6.8l-6.2-3.4,6.2-3.4Z"/>
+        <path class="cls-21" d="M339.6,366.5v6.8l6.2-3.4-6.2-3.4Z"/>
+      </g>
+    </g>
+  </g>
+</svg>

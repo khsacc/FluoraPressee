@@ -1,5 +1,5 @@
 ---
-sidebar_position: 5
+sidebar_position: 7
 title: Configuration関連エンドポイント
 description: 保存済みconfigurationの一覧・取得・適用 (GET/POST /configurations)
 ---
@@ -89,4 +89,5 @@ ESはsequence検証時にresolveし、実行中は返されたexact IDを使用�
 `axis_mode="native_wavelength"`の場合も、pixelではなく表示モードに応じて"Wavelength"または"Raman shift"を返します。
 
 現在のgrating・centre・ROIが同じslotと一致している場合、装置移動は省略して横軸状態だけを更新します。
-応答には`configuration`, `hardware_state`, `display_label`を含みます。
+応答には`configuration`, `hardware_state`, `display_label`, `instrument_state_token`を含みます
+（`instrument_state_token`は不透明な文字列。[`POST /acquire`](acquire.md)参照）。

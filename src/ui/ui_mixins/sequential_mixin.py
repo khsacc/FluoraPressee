@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 
-from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QPushButton,
+from PyQt6.QtWidgets import (QApplication, QDialog, QVBoxLayout, QLabel, QPushButton,
                              QFileDialog, QMessageBox)
 
 
@@ -9,16 +9,72 @@ class SequentialMixin:
     def _lock_ui(self, reason):
         """Add `reason` to the set of active UI locks and disable the
         measurement/config controls (see set_ui_enabled_during_seq). Multiple
-        independent lockers (sequential run, API server) can be active at
-        once; the UI only re-enables once all of them have released.
-        """
-        self._ui_lock_reasons.add(reason)
-        self.set_ui_enabled_during_seq(False)
+        independent lockers (sequential run, API server, an in-flight API
+        request) can be active at once; the UI only re-enables once all of them
+        have released.
 
-    def _unlock_ui(self, reason):
+        Idempotent: with Standby mode this is called once per API request (several
+        times a second during a burst), and re-walking ~35 widgets each time is both
+        wasteful and a source of focus stealing. Idempotency is only safe because
+        every path that re-enables widgets while a lock is held has been closed
+        (work_API_standby.md 方針4) - a widget wrongly re-enabled would otherwise
+        never be repaired, since later locks would skip the walk.
+        """
+        was_locked = self._ui_is_locked()
+        self._ui_lock_reasons.add(reason)
+        if not was_locked:
+            self._capture_lock_focus()
+            self.set_ui_enabled_during_seq(False)
+        self._update_remote_active_indicator()
+
+    def _unlock_ui(self, reason, reapply_hardware=True):
+        """Drop one lock reason; re-enable the controls once none are left.
+
+        Returns without touching anything when `reason` was not actually held, so a
+        stray release can never be mistaken for "the last lock was just removed".
+        `reapply_hardware=False` skips pushing the ROI back to the camera thread on
+        re-enable (see set_ui_enabled_during_seq) - used by the per-request API lock,
+        which must not re-send hardware settings several times a second.
+        """
+        if reason not in self._ui_lock_reasons:
+            return
         self._ui_lock_reasons.discard(reason)
         if len(self._ui_lock_reasons) == 0:
-            self.set_ui_enabled_during_seq(True)
+            self.set_ui_enabled_during_seq(True, reapply_hardware=reapply_hardware)
+        self._update_remote_active_indicator()
+
+    def _reassert_ui_lock(self):
+        """Re-apply the disabled state if any lock reason is still standing.
+
+        Call this right after any unavoidable bulk re-enable (a modal dialog closing
+        and restoring centralWidget, for instance) so that re-enable cannot silently
+        outlive the lock.
+        """
+        if self._ui_is_locked():
+            self.set_ui_enabled_during_seq(False)
+
+    def _capture_lock_focus(self):
+        """Remember the focused widget so unlocking can hand focus back.
+
+        Disabling a focused widget makes Qt move focus elsewhere, so without this a
+        remote request would silently steal the caret out of whatever spin box the
+        operator was typing in. Debouncing lowers how often that happens; only
+        restoring focus actually undoes it (方針5).
+        """
+        self._api_lock_focus_widget = QApplication.focusWidget()
+
+    def _restore_api_lock_focus(self):
+        widget = getattr(self, "_api_lock_focus_widget", None)
+        self._api_lock_focus_widget = None
+        if widget is None:
+            return
+        try:
+            if widget.isVisible() and widget.isEnabled():
+                widget.setFocus()
+        except RuntimeError:
+            # PyQt6 raises this when the underlying C++ widget has been destroyed
+            # since the lock was applied.
+            pass
 
     def show_skip_frames_info(self, link):
         dialog = QDialog(self)
@@ -45,7 +101,7 @@ class SequentialMixin:
             return
         self.lbl_seq_progress.setText(f"Progress: Acquired {self.seq_count} / {self.spin_max_num.value()}")
 
-    def set_ui_enabled_during_seq(self, enabled):
+    def set_ui_enabled_during_seq(self, enabled, reapply_hardware=True):
         self.action_hardware_config.setEnabled(enabled)
 
         self.btn_single.setEnabled(enabled)
@@ -66,6 +122,11 @@ class SequentialMixin:
         self.btn_choose_dir.setEnabled(enabled)
         self.spin_skip_frames.setEnabled(enabled)
         self.spin_max_num.setEnabled(enabled)
+        # btn_stop_seq is deliberately NOT part of this set: stopping a running
+        # sequential measurement has to stay possible. btn_start_seq is, though -
+        # without it an operator could kick off a sequential run while the API server
+        # holds the UI lock (it is only ever disabled by start_sequential() itself).
+        self.btn_start_seq.setEnabled(enabled and bool(self.seq_dir))
 
         self.radio_bg_on.setEnabled(enabled)
         self.radio_bg_off.setEnabled(enabled)
@@ -85,7 +146,13 @@ class SequentialMixin:
         self.spin_centre_wl.setEnabled(enabled)
         if self.radio_spec_mode_raman.isChecked():
             self.spin_exc_wl.setEnabled(enabled)
-        self.btn_apply_spec.setEnabled(enabled)
+        if enabled:
+            # Recomputed rather than blanket-enabled: Apply is only meaningful when the
+            # widgets actually differ from the physical position, and with Standby this
+            # runs after every remote request rather than once per sequential run.
+            self.check_spectrometer_changes()
+        else:
+            self.btn_apply_spec.setEnabled(False)
         self.btn_calib_neon.setEnabled(enabled)
         self.btn_load_configuration.setEnabled(enabled)
 
@@ -102,7 +169,10 @@ class SequentialMixin:
 
         if enabled:
             self.toggle_fitting_panel()
-            self.apply_roi_settings()
+            if reapply_hardware:
+                self.apply_roi_settings()
+            else:
+                self._sync_roi_widget_states()
 
     def on_choose_seq_dir(self):
         start_dir = self.seq_dir if self.seq_dir and os.path.isdir(self.seq_dir) else ""

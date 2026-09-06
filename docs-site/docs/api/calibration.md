@@ -1,5 +1,5 @@
 ---
-sidebar_position: 6
+sidebar_position: 8
 title: "POST /calibration（非推奨）"
 description: 較正係数を直接適用する旧エンドポイント
 ---

@@ -39,9 +39,11 @@ except (ImportError, ModuleNotFoundError):
     create_app = None
 
 try:
+    from src.ui.ui_mixins.acquisition_mixin import GateBusyError
     from src.ui.ui_mixins.api_mixin import ApiMixin
 except (ImportError, ModuleNotFoundError):
     ApiMixin = None
+    GateBusyError = None
 
 
 class DirectBridge:
@@ -197,6 +199,14 @@ class BusyConfigurationHarness(ApiMixin if ApiMixin is not None else object):
 
     def _instrument_status_busy(self):
         return True
+
+    def _gate_busy_reason(self):
+        # AcquisitionMixin's real version, which this harness does not mix in.
+        return {
+            "code": "busy",
+            "reason": "local_operator_action",
+            "message": "The instrument is busy with a local operation.",
+        }
 
     def _release_acquisition_gate(self):
         if self._gate_held_by_me:
@@ -357,18 +367,20 @@ class ConfigurationGateOwnershipTests(unittest.TestCase):
     def test_apply_does_not_release_another_operations_gate_when_busy(self):
         gui = BusyConfigurationHarness()
 
-        with self.assertRaisesRegex(RuntimeError, "instrument busy"):
+        with self.assertRaises(GateBusyError) as caught:
             gui.api_apply_configuration("cfg-1")
 
+        self.assertEqual(caught.exception.detail["code"], "busy")
         self.assertTrue(gui._acquisition_gate.locked())
         self.assertTrue(gui._gate_held_by_me)
 
     def test_acquire_with_configuration_does_not_release_busy_gate(self):
         gui = BusyConfigurationHarness()
 
-        with self.assertRaisesRegex(RuntimeError, "instrument busy"):
+        with self.assertRaises(GateBusyError) as caught:
             gui.api_acquire(configuration_id="cfg-1")
 
+        self.assertEqual(caught.exception.detail["code"], "busy")
         self.assertTrue(gui._acquisition_gate.locked())
         self.assertTrue(gui._gate_held_by_me)
 

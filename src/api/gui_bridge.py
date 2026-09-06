@@ -39,3 +39,15 @@ class GuiBridge(QObject):
         future = Future()
         self._invoke.emit(fn, future)
         return future.result(timeout=timeout)
+
+    def post(self, fn):
+        """Queue ``fn`` on the GUI thread without blocking the caller.
+
+        This is for worker-thread notifications which only need to refresh UI state
+        and do not need a result.  Returning the Future keeps exceptions observable to
+        callers that care, while the normal fire-and-forget path avoids adding a GUI
+        round trip to every API request.
+        """
+        future = Future()
+        self._invoke.emit(fn, future)
+        return future

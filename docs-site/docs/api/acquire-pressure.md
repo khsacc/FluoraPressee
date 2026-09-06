@@ -1,5 +1,5 @@
 ---
-sidebar_position: 9
+sidebar_position: 11
 title: "POST /acquire/pressure"
 description: 取得・フィッティングに圧力算出を追加するエンドポイント
 ---

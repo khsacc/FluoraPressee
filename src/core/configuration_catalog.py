@@ -24,6 +24,7 @@ import math
 import os
 import sqlite3
 import sys
+import threading
 import uuid
 from contextlib import contextmanager
 from copy import deepcopy
@@ -108,14 +109,46 @@ def format_configuration_label(summary: dict[str, Any]) -> str:
 
 class ConfigurationCatalog:
     """Persist immutable records and maintain one active version per
-    calibration profile (not per slot -- see module docstring)."""
+    calibration profile (not per slot -- see module docstring).
+
+    get_configuration() memoises records in process memory. Records are immutable
+    once written, so the content can never go stale; every structural write method
+    clears the cache so index-derived fields cannot either. Usage-counter updates are
+    intentionally excluded because they do not affect record payloads. Two
+    consequences are deliberate:
+
+    * The SHA-256 integrity check runs on the *first* read of each record only.
+      That matches this module's existing assumption that this process is the sole
+      writer of its catalog.
+    * If another process writes to the same catalog directory, this cache will not
+      notice. Restart the application to pick such changes up.
+
+    The cache exists because API responses snapshot configuration state while holding
+    the acquisition gate on the GUI thread, where a SQLite query plus a file read plus
+    a hash on every request would show up as UI latency (work_API_standby.md 方針10).
+    It is read from API worker threads as well as the GUI thread, hence the lock.
+    """
 
     def __init__(self, root: str | os.PathLike[str] | None = None):
         self.root = Path(root) if root is not None else default_configuration_root()
         self.records_root = self.root / "records"
         self.database_path = self.root / "catalog.sqlite3"
         self.records_root.mkdir(parents=True, exist_ok=True)
+        self._record_cache: dict[str, dict[str, Any]] = {}
+        self._record_cache_lock = threading.Lock()
+        # Bumped by every invalidation. get_configuration() captures this value before
+        # it starts the (lock-released) disk read below, and only writes its result
+        # back if the generation is still the same one it started with - otherwise a
+        # concurrent delete/register that invalidated the cache mid-read would have its
+        # clear() overwritten by a write racing in right behind it, permanently
+        # resurrecting a deleted/superseded record until the process restarts.
+        self._record_cache_generation = 0
         self._initialize_database()
+
+    def _invalidate_record_cache(self) -> None:
+        with self._record_cache_lock:
+            self._record_cache.clear()
+            self._record_cache_generation += 1
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.database_path, timeout=10.0)
@@ -735,6 +768,7 @@ class ConfigurationCatalog:
                     final_path.unlink()
                 raise
 
+        self._invalidate_record_cache()
         return record
 
     @staticmethod
@@ -809,7 +843,32 @@ class ConfigurationCatalog:
         calibration.setdefault("raw_spectrum", None)
         return record
 
+    @staticmethod
+    def _copy_configuration_record(record: dict[str, Any]) -> dict[str, Any]:
+        """Deep-copy a record for return, except calibration.raw_spectrum.
+
+        raw_spectrum is written once at registration and, per an audit of every
+        get_configuration() caller (api_mixin.py, file_io_mixin.py,
+        configuration_manager_dialog.py), never read back or mutated afterwards - it
+        is kept purely as evidence of how the calibration was derived. For a large
+        stored spectrum, deep-copying it on every cache hit can dominate the cost the
+        cache exists to avoid. Seeding deepcopy's memo with the array mapped to
+        itself makes deepcopy reuse the same object instead of recursing into it,
+        without touching (and thus never racing on) the cached record itself.
+        """
+        calibration = record.get("calibration")
+        raw_spectrum = calibration.get("raw_spectrum") if calibration else None
+        memo = {id(raw_spectrum): raw_spectrum} if raw_spectrum is not None else {}
+        return deepcopy(record, memo)
+
     def get_configuration(self, configuration_id: str) -> dict[str, Any]:
+        with self._record_cache_lock:
+            cached = self._record_cache.get(configuration_id)
+            generation = self._record_cache_generation
+        if cached is not None:
+            # Copied so a caller mutating the returned dict cannot poison the cache.
+            return self._copy_configuration_record(cached)
+
         with self._connection() as conn:
             row = conn.execute(
                 "SELECT relative_path, sha256, calibration_profile_id FROM configurations "
@@ -835,7 +894,14 @@ class ConfigurationCatalog:
             raise ConfigurationError(
                 f"Configuration file is invalid JSON: {configuration_id}"
             ) from exc
-        return self._normalize_record(record, row["calibration_profile_id"])
+        normalized = self._normalize_record(record, row["calibration_profile_id"])
+        with self._record_cache_lock:
+            if self._record_cache_generation == generation:
+                self._record_cache[configuration_id] = normalized
+            # else: a delete/register invalidated the cache while this read was in
+            # flight (I/O above releases the GIL) - do not resurrect a possibly
+            # deleted/superseded record; the next call will simply re-read from disk.
+        return self._copy_configuration_record(normalized)
 
     def _summary_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
         is_orphaned = row["calibration_profile_id"] is None
@@ -1215,6 +1281,10 @@ class ConfigurationCatalog:
             )
             if cursor.rowcount == 0:
                 raise ConfigurationError(f"Unknown configuration: {configuration_id}")
+        # last_used_at/use_count live only in the management index; they do not alter
+        # the immutable record returned by get_configuration(). Invalidating here made
+        # every configuration-backed acquisition re-read and re-hash the JSON during
+        # its response snapshot, defeating the cache's purpose.
 
     def _unlink_best_effort(
         self, relative_paths: list[str]
@@ -1281,6 +1351,7 @@ class ConfigurationCatalog:
             revision = self._increment_revision(conn)
 
         deleted, errors = self._unlink_best_effort([relative_path])
+        self._invalidate_record_cache()
         return {
             "configuration_id": configuration_id,
             "slot_id": slot_id,
@@ -1322,6 +1393,7 @@ class ConfigurationCatalog:
         deleted, errors = self._unlink_best_effort(
             [row["relative_path"] for row in config_rows]
         )
+        self._invalidate_record_cache()
         return {
             "calibration_profile_id": calibration_profile_id,
             "deleted_configuration_ids": [
@@ -1358,6 +1430,7 @@ class ConfigurationCatalog:
         deleted, errors = self._unlink_best_effort(
             [row["relative_path"] for row in config_rows]
         )
+        self._invalidate_record_cache()
         return {
             "slot_id": slot_id,
             "deleted_configuration_ids": [

@@ -153,22 +153,54 @@ fit, and pressure settings deliberately do not belong to these records.
 
 **Optional HTTP API layer** (`src/api/`, `src/ui/ui_mixins/api_mixin.py`): exposes a subset of
 `SpectrometerGUI`'s functionality over HTTP so other machines on the same LAN can trigger
-measurements. It only starts when the user explicitly clicks "Start API Server" in the GUI's "API
-Server" panel (`ApiMixin.start_api_server`/`on_start_api_server_clicked`) — the intended workflow is
-to finish calibration and basic setup in the GUI first, then activate the API for remote-triggered
-acquisition. While the API server is running, the GUI's measurement/config controls are disabled
-(only display controls like plot style/auto-rescale remain interactive) via
-`SequentialMixin._lock_ui`/`_unlock_ui`, which tracks a set of lock "reasons" (sequential run, API
-server) so either one alone can hold the lock; stopping the API server is how the operator regains
-full local control.
+measurements. The intended workflow is to finish calibration and basic setup in the GUI first, then
+let the API drive acquisition. The GUI's "API Server" panel selects one of three modes
+(`ApiMixin.apply_api_mode`, persisted in the local UI cache as `api_mode`):
+
+- `off` — not listening.
+- `standby` — listening continuously; the measurement/config controls are locked only while a request
+  actually owns the instrument.
+- `locked` — listening continuously with the controls locked for the whole run (identical to the
+  original "Start API Server" behaviour).
+
+A persisted non-`off` mode restarts listening automatically, but only from the camera-init handlers
+(`AcquisitionMixin.on_camera_initialized`/`on_camera_init_failed` call
+`ApiMixin.maybe_autostart_api_server` last) — both handlers re-enable the central widget
+unconditionally, so listening must not begin before them or the UI lock is broken.
+
+The lock itself is `SequentialMixin._lock_ui`/`_unlock_ui`, which tracks a set of lock "reasons"
+(sequential run, API server, an in-flight API request) so any one of them alone can hold it. Both
+helpers are idempotent, which is only sound because every path that re-enabled a widget behind the
+lock's back has been closed — see `work/work_API_standby.md` 方針4 and
+`tests/test_ui_lock_reasons.py` before adding a `setEnabled(True)` anywhere in `src/ui/`.
+
+The per-request lock reason `api_active` is derived from a single choke point rather than applied by
+hand: `AcquisitionMixin._try_acquire_gate(owner)` takes it when `owner == "api"`, and
+`_release_acquisition_gate()` schedules its release on a ~1 s debounce timer (`_api_unlock_timer`), so
+a burst of back-to-back requests holds the lock continuously instead of flickering the controls.
+Focus is captured on lock and restored on unlock. **Both gate methods must only ever be called from
+the GUI thread** — that invariant is why `_gate_owner` needs no lock of its own.
+
+Switching to `off` means "stop accepting new requests", not "abort what is running": `_api_accepting`
+goes false (new requests get 503) and a `QTimer` watches the uvicorn thread until it really exits,
+rather than blocking the GUI thread on `join()`.
 
 - `src/api/gui_bridge.py` (`GuiBridge`): marshals calls from the API's worker threads onto the Qt GUI
   thread via a `pyqtSignal`, since almost all of `SpectrometerGUI`'s state lives in QWidgets and Qt
   forbids touching them off-thread. Acquisition uses a two-phase Future-based handoff
   (`ApiMixin._api_start_acquire`/`api_acquire`) rather than blocking the GUI thread on the result, to
   avoid deadlocking the Qt event loop — see the module docstring for why.
+- `src/core/api_clients.py`: Qt-independent storage and authorisation for named API clients (one key
+  per paired application, optional per-client IP allow-list with CIDR support). Stored under the
+  user's application-data directory (`FluoraPressee/api_clients.json`, atomic write, `0600` on POSIX);
+  the legacy single-key `fluora_pressee_api_key.json` at the repo root is migrated verbatim on first
+  load and then deleted. The list is held as an immutable tuple and replaced wholesale on edit, so API
+  worker threads read it without a lock. `src/ui/menu/api_clients_dialog.py` is the management dialog
+  (menu "API → Manage Clients").
 - `src/api/schemas.py` / `src/api/server.py` (`create_app`): Pydantic request/response models and the
-  FastAPI app factory (routes, `X-API-Key` header auth). `src/ui/ui_mixins/api_mixin.py` (`ApiMixin`)
+  FastAPI app factory (routes, `X-API-Key` header auth, per-client IP checks, and `expose_docs` which
+  defaults to False because FastAPI's own `/docs`+`/openapi.json` are not behind the key dependency).
+  `src/ui/ui_mixins/api_mixin.py` (`ApiMixin`)
   implements the actual logic each route calls into (`api_acquire`, `api_fit`, `api_pressure`,
   configuration list/get/resolve/apply, `api_get_status`, and the read-only hardware/config
   endpoints) independent of
@@ -182,14 +214,27 @@ full local control.
   acquisition share one exclusion-gate ownership, while omission preserves the current instrument
   and axis state. `axis_mode="pixel"` positions the configuration without applying its calibration.
   The inline-coefficient `POST /calibration` route is deprecated.
+- Every response carries an opaque `instrument_state_token` (`AcquisitionMixin.instrument_state_token`,
+  bumped by `_bump_instrument_state()` from every state change that can alter an acquisition's
+  result). A request may send it back as `expected_state_token` to be rejected with 409 if anything
+  changed meanwhile. It is compared at exactly one point — right after the gate is taken and before
+  anything is changed — which is what lets `configuration_id` and `expected_state_token` be combined.
+  The acquire response's state is snapshotted inside the gate (`_api_acquire_snapshot`), both for
+  correctness under multiple clients and because it cuts the `gui_bridge.call()` round trips per
+  `/acquire` from three to one.
 - Background (dark) subtraction over the API defaults to rejecting a mismatched exposure/ROI outright
   (`BackgroundMismatchError` → HTTP 422) rather than silently subtracting an invalid dark frame;
   callers can opt into subtracting anyway (`dark.ignore_mismatch`) or supply their own dark spectrum
   directly (`dark.mode="provided"`). Remote re-acquisition of a fresh dark frame is not implemented —
   the app has no shutter control, so that needs to land in the GUI first.
+- A camera that is not running answers acquisition requests with 503 (`CameraNotReadyError`) rather
+  than taking the gate, and an acquisition that times out is cleaned up by `_api_abort_acquire`
+  (camera stopped first, then the gate released) — without that the GUI would stay locked forever,
+  since the lock is derived from the gate.
 - See `docs-site/docs/api/` for the full endpoint reference (one page per endpoint/group, published as
-  the "API" section of the online manual) and `work/work_API.md` for the implementation
-  history/design rationale.
+  the "API" section of the online manual), `work/work_API.md` for the original implementation
+  history/design rationale, and `work/work_API_standby.md` for the Standby-mode design (gate audit,
+  UI-lock derivation, named keys, state token).
 
 ## Notes on the code
 

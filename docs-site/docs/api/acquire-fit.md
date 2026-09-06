@@ -1,5 +1,5 @@
 ---
-sidebar_position: 8
+sidebar_position: 10
 title: "POST /acquire/fit"
 description: 取得したデータにピークフィッティングを追加するエンドポイント
 ---

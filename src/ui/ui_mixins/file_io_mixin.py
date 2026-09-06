@@ -11,6 +11,7 @@ from src.core.configuration_catalog import (
     format_configuration_label,
 )
 from src.core.measurement_metadata import background_mismatch_fields, build_hardware_metadata, public_axis_kind
+from src.ui.ui_mixins.acquisition_mixin import GateBusyError
 
 
 def _background_default_filename(
@@ -139,6 +140,7 @@ class FileIOMixin:
         self.positioned_configuration_id = configuration_id
         self.positioned_configuration_slot_id = slot_id
         self.axis_source = axis_source
+        self._bump_instrument_state()
         self.lbl_loaded_configuration.setText(f"Loaded: {label}")
         self.update_plot_labels()
         self.sync_fit_range_to_spectrum(force=True)
@@ -175,6 +177,7 @@ class FileIOMixin:
         self.active_configuration_slot_id = None
         self.positioned_configuration_id = None
         self.positioned_configuration_slot_id = None
+        self._bump_instrument_state()
         self.lbl_loaded_configuration.setText("Loaded: None")
         self.update_plot_labels()
         self._refresh_after_axis_change()
@@ -194,6 +197,7 @@ class FileIOMixin:
         self.calib_laser_wl = None
         self.active_configuration_id = None
         self.active_configuration_slot_id = None
+        self._bump_instrument_state()
         self.configuration_label = f"{self.configuration_label} (calibration invalidated: {reason})"
         self.lbl_loaded_configuration.setText(f"Loaded: {self.configuration_label}")
         self.update_plot_labels()
@@ -345,7 +349,24 @@ class FileIOMixin:
         }
         return self.configuration_catalog.register_configuration(draft)
 
+    def _release_gui_config_gate(self):
+        """Release only the gate ownership taken by an operator-started configuration
+        load.
+
+        An API-driven configuration apply runs through the same GUI callbacks
+        (_finalize_pending_configuration / _fail_pending_configuration), but its gate
+        must be released only after the API worker thread has assembled the response,
+        so it must not be released here. A flag distinguishes the two owners so this
+        mix-up can never happen structurally (work_API_standby.md 表#8).
+        """
+        if getattr(self, "_gui_config_gate_held", False):
+            self._gui_config_gate_held = False
+            self._release_acquisition_gate()
+
     def on_load_configuration(self):
+        # Keep the dialog itself outside the gate: otherwise every API request would
+        # get 409 for as long as the operator is still deciding
+        # (work_API_standby.md Step 0 手順3).
         dialog = ConfigurationBrowserDialog(
             self.configuration_catalog,
             self.configuration_hardware_context(),
@@ -354,6 +375,15 @@ class FileIOMixin:
         )
         if dialog.exec() != dialog.DialogCode.Accepted:
             return
+        # This is an async scope involving a physical move, so take the gate after
+        # confirmation and before the move starts.
+        if not self._try_acquire_gate():
+            QMessageBox.warning(
+                self, "Busy",
+                "Another operation is in progress. Please try again in a moment."
+            )
+            return
+        self._gui_config_gate_held = True
         try:
             record = self.configuration_catalog.get_configuration(
                 dialog.selected_configuration_id
@@ -375,6 +405,7 @@ class FileIOMixin:
             self._pending_axis_source = None
             QMessageBox.warning(self, "Error", f"Failed to load configuration:\n{e}")
             self._clear_pending_configuration()
+            self._release_gui_config_gate()
 
     def _apply_pixel_configuration(self, label, configuration_id, slot_id):
         """Keep the configuration's physical state but expose an uncalibrated axis."""
@@ -387,6 +418,7 @@ class FileIOMixin:
         self.positioned_configuration_id = configuration_id
         self.positioned_configuration_slot_id = slot_id
         self.axis_source = "pixel"
+        self._bump_instrument_state()
         self.lbl_loaded_configuration.setText(f"Loaded: {label} (pixel axis)")
         self.update_plot_labels()
         self.sync_fit_range_to_spectrum(force=True)
@@ -533,41 +565,47 @@ class FileIOMixin:
         slot_id = self._pending_configuration_slot_id
         completion_future = self._pending_configuration_future
         try:
-            if self._pending_configuration_axis_mode == "pixel":
-                self._apply_pixel_configuration(
-                    self._pending_configuration_label, configuration_id, slot_id
-                )
-            else:
-                self.apply_calibration(
-                    self._pending_calib_coeffs,
-                    self._pending_configuration_label,
-                    calib_unit=self._pending_calib_unit,
-                    calib_laser_wl=self._pending_calib_laser_wl,
-                    axis_source=self._pending_axis_source,
-                    configuration_id=configuration_id,
-                    slot_id=slot_id,
-                )
             try:
-                self.configuration_catalog.mark_used(configuration_id)
+                if self._pending_configuration_axis_mode == "pixel":
+                    self._apply_pixel_configuration(
+                        self._pending_configuration_label, configuration_id, slot_id
+                    )
+                else:
+                    self.apply_calibration(
+                        self._pending_calib_coeffs,
+                        self._pending_configuration_label,
+                        calib_unit=self._pending_calib_unit,
+                        calib_laser_wl=self._pending_calib_laser_wl,
+                        axis_source=self._pending_axis_source,
+                        configuration_id=configuration_id,
+                        slot_id=slot_id,
+                    )
+                try:
+                    self.configuration_catalog.mark_used(configuration_id)
+                except Exception as exc:
+                    print(f"Failed to update configuration usage metadata: {exc}")
             except Exception as exc:
-                print(f"Failed to update configuration usage metadata: {exc}")
-        except Exception as exc:
+                self._clear_pending_configuration()
+                self._loading_config = False
+                if completion_future is not None and not completion_future.done():
+                    completion_future.set_exception(exc)
+                    return
+                raise
+
             self._clear_pending_configuration()
             self._loading_config = False
             if completion_future is not None and not completion_future.done():
-                completion_future.set_exception(exc)
-                return
-            raise
-
-        self._clear_pending_configuration()
-        self._loading_config = False
-        if completion_future is not None and not completion_future.done():
-            completion_future.set_result(True)
+                completion_future.set_result(True)
+        finally:
+            # The GUI-load gate ownership ends here regardless of success, failure, or
+            # exception.
+            self._release_gui_config_gate()
 
     def _fail_pending_configuration(self, message):
         completion_future = getattr(self, "_pending_configuration_future", None)
         self._clear_pending_configuration()
         self._loading_config = False
+        self._release_gui_config_gate()
         if completion_future is not None and not completion_future.done():
             completion_future.set_exception(RuntimeError(message))
             return True
@@ -638,6 +676,7 @@ class FileIOMixin:
             QMessageBox.information(self, "Success", "Background saved successfully.")
             self.loaded_bg_data = bg_arr
             self.loaded_bg_metadata = bg_meta
+            self._bump_instrument_state()
             self.lbl_loaded_bg.setText(f"Loaded: {os.path.basename(file_path)}")
             self.radio_bg_on.setChecked(True)
             self.on_fit_settings_changed()
@@ -645,17 +684,26 @@ class FileIOMixin:
             QMessageBox.critical(self, "Error", f"Failed to save background:\n{e}")
 
     def on_load_bg_clicked(self):
+        # Keep the file dialog outside the gate, so every API request does not get
+        # 409 for as long as the dialog is left open (work_API_standby.md Step 0 手順2).
         file_path, _ = QFileDialog.getOpenFileName(self, "Load Background Data", self._last_save_dir, "Text/JSON Files (*.txt *.json)")
         if file_path:
             self._last_save_dir = os.path.dirname(file_path)
             self._save_local_cache("last_save_dir", self._last_save_dir)
             try:
-                bg_arr, bg_meta = self.file_io.load_background(file_path)
-                self.loaded_bg_data = bg_arr
-                self.loaded_bg_metadata = bg_meta
-                self.lbl_loaded_bg.setText(f"Loaded: {os.path.basename(file_path)}")
-                self.radio_bg_on.setChecked(True)
-                self.on_fit_settings_changed()
+                with self.acquisition_gate():
+                    bg_arr, bg_meta = self.file_io.load_background(file_path)
+                    self.loaded_bg_data = bg_arr
+                    self.loaded_bg_metadata = bg_meta
+                    self._bump_instrument_state()
+                    self.lbl_loaded_bg.setText(f"Loaded: {os.path.basename(file_path)}")
+                    self.radio_bg_on.setChecked(True)
+                    self.on_fit_settings_changed()
+            except GateBusyError:
+                QMessageBox.warning(
+                    self, "Busy",
+                    "Another operation is in progress. Please try again in a moment."
+                )
             except ValueError as e:
                 QMessageBox.warning(self, "Error", str(e))
             except Exception as e:

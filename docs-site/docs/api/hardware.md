@@ -1,5 +1,5 @@
 ---
-sidebar_position: 3
+sidebar_position: 5
 title: 接続機器情報
 description: カメラ・分光器の識別情報とライブ状態照会 (GET /hardware/camera, GET /hardware/spectrometer)
 ---

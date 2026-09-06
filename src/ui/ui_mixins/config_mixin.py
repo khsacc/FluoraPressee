@@ -5,7 +5,9 @@ from PyQt6.QtWidgets import QMessageBox
 from src.ui.menu.hardware_config_dialog import HardwareConfigDialog
 from src.ui.menu.instrument_status_dialog import InstrumentStatusDialog
 from src.ui.menu.configuration_manager_dialog import ConfigurationManagerDialog
+from src.core.api_clients import load_clients, remove_legacy_key_file, save_clients
 from src.ui.local_cache import load_local_cache, save_local_cache
+from src.ui.ui_mixins.acquisition_mixin import GateBusyError
 
 class ConfigMixin:
     def on_open_hardware_config_clicked(self):
@@ -20,7 +22,17 @@ class ConfigMixin:
             parent=self,
         )
         dialog.applied.connect(self._on_hardware_config_applied)
-        dialog.exec()
+        # This dialog exists to change settings, so it is correct to hold the
+        # exclusion gate for as long as it is open (work_API_standby.md 表#9).
+        try:
+            with self.acquisition_gate():
+                dialog.exec()
+        except GateBusyError:
+            QMessageBox.warning(
+                self, "Busy",
+                "A remote operation is in progress, so the hardware configuration "
+                "dialog cannot be opened right now."
+            )
 
     def on_open_camera_status_clicked(self):
         if self.instrument_status_window is None:
@@ -28,6 +40,12 @@ class ConfigMixin:
                 self.thread,
                 self.spec_ctrl,
                 busy_check=self._instrument_status_busy,
+                # 表#10: this dialog performs live hardware queries
+                # (camera_thread.request_status() and spec_ctrl.get_status_snapshot()).
+                # It is modeless, though, so the gate is held only for the duration of
+                # one refresh cycle, not for as long as the dialog itself is open.
+                gate_acquire=self._try_acquire_gate,
+                gate_release=self._release_acquisition_gate,
                 parent=self,
             )
         self.instrument_status_window.show()
@@ -39,7 +57,7 @@ class ConfigMixin:
             self.configuration_catalog,
             active_configuration_id=self.active_configuration_id,
             positioned_configuration_id=self.positioned_configuration_id,
-            ui_lock_check=lambda: bool(getattr(self, "_ui_lock_reasons", set())),
+            ui_lock_check=lambda: self._ui_is_locked(),
             parent=self,
         )
         dialog.exec()
@@ -163,19 +181,32 @@ class ConfigMixin:
     def _save_local_cache(self, key, value):
         save_local_cache(key, value)
 
-    def load_api_key_file(self):
-        try:
-            with open("fluora_pressee_api_key.json", "r", encoding="utf-8") as f:
-                return json.load(f).get("api_key")
-        except Exception:
-            return None
+    def load_api_clients(self):
+        """Return the authorised API clients, migrating the old single-key file.
 
-    def save_api_key_file(self, key):
-        try:
-            with open("fluora_pressee_api_key.json", "w", encoding="utf-8") as f:
-                json.dump({"api_key": key}, f, indent=4)
-        except Exception as e:
-            print(f"Failed to save API key: {e}")
+        The legacy plaintext key at the repository root is read once, carried over as
+        a client named "default" with no IP restriction (so an already-paired client
+        keeps working with no reconfiguration), then deleted.
+        """
+        clients, needs_save, migrated_legacy = load_clients()
+        persisted = not needs_save
+        if needs_save:
+            try:
+                self.save_api_clients(clients)
+                persisted = True
+            except Exception as exc:
+                # Keep the in-memory key usable for this run, but never delete the
+                # legacy source unless its replacement was durably written.
+                print(f"Failed to persist API clients: {exc}")
+        if migrated_legacy and persisted:
+            remove_legacy_key_file()
+        return clients
+
+    def save_api_clients(self, clients):
+        # Let the caller decide whether an in-memory replacement or legacy-file
+        # deletion is safe. Swallowing this exception can resurrect revoked keys after
+        # restart and can destroy the only copy during migration.
+        save_clients(clients)
 
     def load_spectrometer_config(self):
         config_path = "spectrometerConfig.json"

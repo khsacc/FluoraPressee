@@ -1,5 +1,5 @@
 ---
-sidebar_position: 2
+sidebar_position: 4
 title: "GET /status"
 description: 現在の状態を返すエンドポイント
 ---
@@ -26,6 +26,10 @@ description: 現在の状態を返すエンドポイント
     "grating_index": 2, "grooves_per_mm": 1200,
     "actual_center_wavelength_nm": 694.0,
     "roi_mode": "1d_roi", "roi_start": 100, "roi_end": 140
-  }
+  },
+  "instrument_state_token": "3f2a91c0:14"
 }
 ```
+- `instrument_state_token`は**不透明な文字列**で、等値比較のみに使います。
+  [`POST /acquire`](acquire.md)の`expected_state_token`にそのまま渡すと、
+  ここで確認した状態のままであることを保証して取得できます。

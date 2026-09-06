@@ -50,6 +50,10 @@ class AcquireRequest(BaseModel):
     exposure_time_s: float | None = None
     accumulations: int | None = Field(default=None, ge=1)
     dark: DarkOptions = Field(default_factory=DarkOptions)
+    # Optional, and deliberately never required: pass back the instrument_state_token
+    # from an earlier response to have the request rejected with 409 if anything about
+    # the instrument changed in the meantime. Treat the value as opaque.
+    expected_state_token: str | None = None
 
     @model_validator(mode="after")
     def _axis_mode_belongs_to_explicit_configuration(self):
@@ -121,6 +125,8 @@ class AcquireResponse(BaseModel):
     timestamp: str
     configuration: dict[str, Any]
     hardware_state: dict[str, Any]
+    # Opaque; compare for equality only. See AcquireRequest.expected_state_token.
+    instrument_state_token: str | None = None
     background_mismatch_warning: bool | None = None
     # {"source": "pixel"|"native_wavelength"|"calibrated", "unit": "nm"|"cm-1"|None,
     #  "calibrated": bool} - same vocabulary and single source of truth
@@ -157,6 +163,7 @@ class StatusResponse(BaseModel):
     background: dict
     configuration: dict[str, Any]
     hardware_state: dict[str, Any]
+    instrument_state_token: str | None = None
 
 
 class ConfigurationListResponse(BaseModel):
@@ -226,6 +233,7 @@ class ApplyConfigurationResponse(BaseModel):
     display_label: str
     configuration: dict[str, Any]
     hardware_state: dict[str, Any]
+    instrument_state_token: str | None = None
 
 
 class HardwareIdentity(BaseModel):
